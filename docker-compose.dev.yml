@@ -1,0 +1,67 @@
+# Local dev infrastructure for Crucible CE (running from source).
+# Postgres behind PgBouncer + Redis, the same topology as a multi-replica
+# deployment. Bring up with `npm run db:up`; wipe with `npm run db:reset`.
+# Credentials match DATABASE_URL / DIRECT_URL in .env.example.
+# Mailpit catches every email the app sends: SMTP on :1025, web UI on
+# http://localhost:8025. Set SMTP_HOST=localhost SMTP_PORT=1025 in .env.local
+# to test email paging without a real mail provider.
+#
+# Own project name, so `npm run db:up` never touches a self-hosted stack
+# started from docker-compose.yml in the same folder.
+name: crucible-ce-dev
+
+services:
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "1025:1025" # SMTP (SMTP_HOST=localhost SMTP_PORT=1025)
+      - "8025:8025" # web UI + API: http://localhost:8025
+
+  postgres:
+    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    environment:
+      POSTGRES_USER: crucible
+      POSTGRES_PASSWORD: crucible
+      POSTGRES_DB: crucible
+    ports:
+      - "127.0.0.1:5432:5432" # DIRECT_URL (migrations); localhost only
+    volumes:
+      - crucible_dev_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crucible"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  pgbouncer:
+    image: edoburu/pgbouncer:latest
+    environment:
+      DB_HOST: postgres
+      DB_USER: crucible
+      DB_PASSWORD: crucible
+      DB_NAME: crucible
+      POOL_MODE: transaction
+      MAX_CLIENT_CONN: "100"
+      DEFAULT_POOL_SIZE: "20"
+      AUTH_TYPE: scram-sha-256
+      # The image listens on 5432 by default; match the published port.
+      LISTEN_PORT: "6432"
+    ports:
+      - "6432:6432" # DATABASE_URL (pooled, app runtime)
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  redis:
+    image: redis:7@sha256:4fa24486b8bcca8eec45ee0eb166edc674795e53a2b53d1a9ef263eecebaac85
+    ports:
+      - "127.0.0.1:6379:6379" # localhost only
+    volumes:
+      - crucible_dev_redisdata:/data
+
+# Names pinned so existing dev data survives the project rename.
+volumes:
+  crucible_dev_pgdata:
+    name: crucible-ce_crucible_dev_pgdata
+  crucible_dev_redisdata:
+    name: crucible-ce_crucible_dev_redisdata

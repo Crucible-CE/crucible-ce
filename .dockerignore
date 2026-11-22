@@ -1,0 +1,45 @@
+# Crucible CE Docker build context exclusions.
+
+# Dependency + build artifacts — reinstalled/rebuilt inside the image.
+node_modules
+.next
+tsconfig.tsbuildinfo
+
+# VCS + CI/editor metadata
+.git
+.github
+.vscode
+.idea
+
+# Local/dev-only infra
+docker-compose.yml
+docker-compose.dev.yml
+
+# Real data — MUST stay out of the build context. Local-disk evidence
+# blobs are never something a Docker image should bake in.
+uploads
+data
+
+# Docs (not needed at runtime, keeps context small)
+docs
+README.md
+!providers/README.md
+SECURITY.md
+CONTRIBUTING.md
+
+# Test / QA artifacts
+coverage
+playwright-report
+test-results
+.playwright
+e2e
+
+# Env files — secrets must never enter a build context/layer.
+.env
+.env.*
+!.env.example
+
+# Misc
+*.log
+npm-debug.log*
+.DS_Store

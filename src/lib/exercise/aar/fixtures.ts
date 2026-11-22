@@ -1,0 +1,117 @@
+// Hand-built AAR inputs for unit tests. No database.
+
+import type { AarInputs } from "./inputs";
+
+export function fixtureInputs(overrides: Partial<AarInputs> = {}): AarInputs {
+  return {
+    exercise: {
+      id: "ex1",
+      title: "Depot ransomware",
+      mode: "crisissim",
+      modeLabel: "Crisis Sim",
+      status: "ended",
+      isPractice: false,
+      sponsor: "Chief operating officer",
+      scope: "Corporate IT and the depot.",
+      hazard: "Ransomware",
+      assumptions: "",
+      missionAreas: ["Response"],
+      plansExercised: [],
+      requirements: [],
+      scenarioSummary: "A ransomware crew hit the file servers.",
+      startedAt: "2026-10-20T14:00:00.000Z",
+      endedAt: "2026-10-20T15:10:00.000Z",
+      durationMin: 65,
+      timezone: "UTC",
+      scenarioStartAt: "2026-10-23T17:30:00.000Z",
+      endReason: "facilitator",
+    },
+    objectives: [
+      { id: "obj1", seq: 1, text: "Decide on containment within the first hour.", capabilities: [{ id: "c1", key: "RS.MA", name: "Incident management", framework: "nist-csf" }], injectIds: ["inj1"] },
+      { id: "obj2", seq: 2, text: "Make notification decisions on time.", capabilities: [{ id: "c2", key: "RS.CO", name: "Incident response reporting and communication", framework: "nist-csf" }], injectIds: ["inj2"] },
+    ],
+    injects: [
+      {
+        id: "inj1",
+        seq: 1,
+        title: "Ransomware on file servers",
+        scenarioTime: "2026-10-23T17:30:00.000Z",
+        openedAt: "2026-10-20T14:00:00.000Z",
+        closedAt: "2026-10-20T14:30:00.000Z",
+        closeTrigger: "facilitator",
+        summary: "Files are encrypted.",
+        expectedActions: ["Isolate affected hosts"],
+        objectiveIds: ["obj1"],
+        docSectionRefs: [],
+      },
+      {
+        id: "inj2",
+        seq: 2,
+        title: "Reporter calls",
+        scenarioTime: "2026-10-23T23:30:00.000Z",
+        openedAt: "2026-10-20T14:30:00.000Z",
+        closedAt: "2026-10-20T15:00:00.000Z",
+        closeTrigger: "endex",
+        summary: "A reporter asks for comment.",
+        expectedActions: [],
+        objectiveIds: ["obj2"],
+        docSectionRefs: [],
+      },
+    ],
+    decisions: [
+      {
+        sourceId: "ev1",
+        sourceKind: "event",
+        injectId: "inj1",
+        seq: 1,
+        scenarioTime: "2026-10-23T17:30:00.000Z",
+        team: "Executive",
+        owner: "Chief executive",
+        question: "What is your first move?",
+        decision: "Isolate the affected systems now.",
+        split: { "Isolate the affected systems now.": 2, "Wait and watch.": 1 },
+        kind: "decision",
+        rating: null,
+        ratingSource: null,
+        ratingRationale: null,
+        at: "2026-10-20T14:30:00.000Z",
+        participantText: false,
+      },
+    ],
+    responses: [
+      { sourceId: "r1", sourceKind: "answer", kind: "deliverable", injectId: "inj2", team: "Executive", role: "General Counsel", text: "Holding statement drafted by Dana Lee for the press.", rating: "met", ratingSource: "human", at: "2026-10-20T14:50:00.000Z" },
+    ],
+    observations: [
+      { id: "o1", kind: "afi", text: "The team did not know who calls the insurer.", injectId: "inj2", objectiveId: "obj2", capabilityKey: "RS.CO", authorRole: "Evaluator", at: "2026-10-20T14:55:00.000Z" },
+    ],
+    ratings: [
+      { id: "cr1", objectiveId: "obj1", capabilityKey: "RS.MA", rating: "S", source: "evaluator", rationale: "Isolation was quick but the order was unclear.", createdAt: "2026-10-20T15:20:00.000Z" },
+    ],
+    hotwash: [
+      { id: "h1", kind: "parking_lot", objectiveId: null, text: "Ask Dana Lee about cyber insurance limits." },
+      { id: "h2", kind: "strength", objectiveId: "obj1", text: "Backups were clean." },
+    ],
+    feedback: { count: 2, eligible: 3, averages: { realism: 4.5 }, comments: [{ id: "f1", text: "Good pace." }], strengths: [], improvements: [] },
+    clocks: [
+      { id: "k1", key: "sec_8k", label: "SEC Form 8-K Item 1.05", status: "met", triggeredAt: "2026-10-23T17:30:00.000Z", deadlineAt: "2026-10-29T17:30:00.000Z", metAt: "2026-10-24T09:00:00.000Z" },
+      { id: "k2", key: "gdpr_72h", label: "GDPR 72 hours", status: "missed", triggeredAt: "2026-10-23T17:30:00.000Z", deadlineAt: "2026-10-26T17:30:00.000Z", metAt: null },
+      { id: "k3", key: "insurer_notice", label: "Insurer notice", status: "running", triggeredAt: "2026-10-23T17:30:00.000Z", deadlineAt: "2026-10-24T17:30:00.000Z", metAt: null },
+      { id: "k4", key: "state_ag", label: "State attorney general", status: "pending", triggeredAt: null, deadlineAt: null, metAt: null },
+    ],
+    roster: [
+      { participantId: "p1", name: "Fran Facilitator", aliases: [], title: null, organization: "Acme", team: null, roles: ["lead_facilitator"], guest: false, joinedAt: "2026-10-20T13:55:00.000Z", leftAt: null, removed: false, attendance: "attended", noDevice: false },
+      { participantId: "p2", name: "Dana Lee", aliases: [], title: "General Counsel", organization: "Acme", team: "Executive", roles: ["player"], guest: true, joinedAt: "2026-10-20T13:58:00.000Z", leftAt: null, removed: false, attendance: "attended", noDevice: false },
+      { participantId: "p3", name: "Sam Ortiz", aliases: ["Samuel Ortiz"], title: "CISO", organization: "Acme Security", team: "Technical", roles: ["player"], guest: false, joinedAt: null, leftAt: null, removed: false, attendance: "attended", noDevice: false },
+      { participantId: "p4", name: "Riley Park", aliases: [], title: null, organization: null, team: "Technical", roles: ["player"], guest: true, joinedAt: null, leftAt: null, removed: false, attendance: "attended", noDevice: false },
+    ],
+    requiredRoles: [
+      { role: "CISO", present: true },
+      { role: "Communications lead", present: false },
+    ],
+    sourceDocument: null,
+    frameworks: ["nist-csf"],
+    testedControls: [],
+    techniquesExercised: [],
+    ...overrides,
+  };
+}

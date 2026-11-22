@@ -1,0 +1,25 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "server.ts",
+    "providers/*.{js,mjs,cjs}",
+    "e2e/global-setup.ts",
+    "e2e/global-teardown.ts",
+    "e2e/webhook-receiver.mjs"
+  ],
+  "ignoreExportsUsedInFile": true,
+  "ignoreIssues": {
+    "src/components/ui/**": [
+      "exports",
+      "types"
+    ]
+  },
+  "ignoreDependencies": [
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+    "eslint",
+    "eslint-config-next",
+    "mammoth",
+    "pdfjs-dist"
+  ]
+}

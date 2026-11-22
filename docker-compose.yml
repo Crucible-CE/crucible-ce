@@ -1,0 +1,159 @@
+# Crucible CE self-host stack: the app, Postgres, and Redis.
+#
+# Quickstart:
+#   1. cp .env.docker.example .env   (then edit the secrets: openssl rand -hex 32)
+#   2. docker compose up -d --build
+#      (builds the image from this checkout; until release images are published
+#      on ghcr.io, a plain `docker compose up -d` has nothing to pull)
+#   3. docker compose logs app | grep "setup code"   (one-time first-run code)
+#   4. open http://localhost:3000 and finish setup in the browser with that code
+#
+# The app refuses to boot on placeholder / short secrets (src/lib/boot/secrets.ts).
+#
+# Data lives in named volumes (database, redis, uploads). Back up
+# `crucible_pgdata` and `crucible_uploads` and you can rebuild everything else.
+services:
+  app:
+    image: ghcr.io/${CRUCIBLE_IMAGE_OWNER:-crucible-ce}/crucible-ce:${CRUCIBLE_VERSION:-latest}
+    build: .
+    ports:
+      - "${CRUCIBLE_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://crucible:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/crucible
+      DIRECT_URL: postgresql://crucible:${POSTGRES_PASSWORD}@postgres:5432/crucible
+      REDIS_URL: redis://redis:6379
+      NEXTAUTH_URL: ${PUBLIC_URL:-http://localhost:3000}
+      AUTH_URL: ${PUBLIC_URL:-http://localhost:3000}
+      NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?set NEXTAUTH_SECRET in .env}
+      AUTH_SECRET: ${NEXTAUTH_SECRET}
+      MASTER_KEK: ${MASTER_KEK:?set MASTER_KEK in .env}
+      PUBLIC_URL: ${PUBLIC_URL:-http://localhost:3000}
+      # 0 = no trusted proxy (forwarding headers ignored); 1 behind one reverse proxy.
+      TRUSTED_PROXY_HOPS: ${TRUSTED_PROXY_HOPS:-0}
+      # Optional: extra comma-separated origins allowed to open a Socket.io connection.
+      SOCKET_EXTRA_ALLOWED_ORIGINS: ${SOCKET_EXTRA_ALLOWED_ORIGINS:-}
+      # Optional: email (member invites, verification, email paging).
+      # SMTP (any mail server) wins over Resend when both are set. See docs/paging.md.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-}
+      SMTP_SECURE: ${SMTP_SECURE:-}
+      SMTP_REQUIRE_TLS: ${SMTP_REQUIRE_TLS:-}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      FROM_EMAIL: ${FROM_EMAIL:-}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-}
+      # Optional: SMS/voice paging (bring your own Twilio)
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_INBOUND_ACK: ${TWILIO_INBOUND_ACK:-}
+      # Optional: signed paging webhook(s). See docs/delivery-providers.md.
+      DELIVERY_WEBHOOK_URL: ${DELIVERY_WEBHOOK_URL:-}
+      DELIVERY_WEBHOOK_SECRET: ${DELIVERY_WEBHOOK_SECRET:-}
+      DELIVERY_WEBHOOK_URL_2: ${DELIVERY_WEBHOOK_URL_2:-}
+      DELIVERY_WEBHOOK_SECRET_2: ${DELIVERY_WEBHOOK_SECRET_2:-}
+      DELIVERY_WEBHOOK_URL_3: ${DELIVERY_WEBHOOK_URL_3:-}
+      DELIVERY_WEBHOOK_SECRET_3: ${DELIVERY_WEBHOOK_SECRET_3:-}
+      DELIVERY_WEBHOOK_URL_4: ${DELIVERY_WEBHOOK_URL_4:-}
+      DELIVERY_WEBHOOK_SECRET_4: ${DELIVERY_WEBHOOK_SECRET_4:-}
+      DELIVERY_WEBHOOK_URL_5: ${DELIVERY_WEBHOOK_URL_5:-}
+      DELIVERY_WEBHOOK_SECRET_5: ${DELIVERY_WEBHOOK_SECRET_5:-}
+      DELIVERY_WEBHOOK_URL_6: ${DELIVERY_WEBHOOK_URL_6:-}
+      DELIVERY_WEBHOOK_SECRET_6: ${DELIVERY_WEBHOOK_SECRET_6:-}
+      DELIVERY_WEBHOOK_URL_7: ${DELIVERY_WEBHOOK_URL_7:-}
+      DELIVERY_WEBHOOK_SECRET_7: ${DELIVERY_WEBHOOK_SECRET_7:-}
+      DELIVERY_WEBHOOK_URL_8: ${DELIVERY_WEBHOOK_URL_8:-}
+      DELIVERY_WEBHOOK_SECRET_8: ${DELIVERY_WEBHOOK_SECRET_8:-}
+      DELIVERY_WEBHOOK_URL_9: ${DELIVERY_WEBHOOK_URL_9:-}
+      DELIVERY_WEBHOOK_SECRET_9: ${DELIVERY_WEBHOOK_SECRET_9:-}
+      DELIVERY_WEBHOOK_ALLOW_PRIVATE: ${DELIVERY_WEBHOOK_ALLOW_PRIVATE:-}
+      # Optional: delivery tuning (defaults in .env.docker.example)
+      DELIVERY_RETRY_BACKOFF_MINUTES: ${DELIVERY_RETRY_BACKOFF_MINUTES:-1,5,15}
+      DELIVERY_RATE_LIMIT_PER_RECIPIENT_HOUR: ${DELIVERY_RATE_LIMIT_PER_RECIPIENT_HOUR:-}
+      DELIVERY_RATE_LIMIT_PER_ORG_HOUR: ${DELIVERY_RATE_LIMIT_PER_ORG_HOUR:-}
+      DELIVERY_RATE_LIMIT_PER_NUMBER_CEILING_HOUR: ${DELIVERY_RATE_LIMIT_PER_NUMBER_CEILING_HOUR:-}
+      DELIVERY_ACK_LINK_TTL_HOURS: ${DELIVERY_ACK_LINK_TTL_HOURS:-}
+      # Custom delivery providers load from the mounted folder below.
+      # Plugins run with the full privileges of the app: install only code you trust.
+      PROVIDERS_DIR: /app/providers
+      # Read by the example plugin (providers/example-ntfy.mjs); add your own plugins' vars here.
+      NTFY_URL: ${NTFY_URL:-}
+      NTFY_TOPIC: ${NTFY_TOPIC:-}
+      NTFY_TOKEN: ${NTFY_TOKEN:-}
+      # Optional: signed case-file exports and after-action reports (Ed25519 private key, base64)
+      EXPORT_SIGNING_PRIVATE_KEY: ${EXPORT_SIGNING_PRIVATE_KEY:-}
+      # Optional: Crucible Cloud trial sign-up link for the Cloud page (unset shows "Coming soon")
+      CLOUD_TRIAL_URL: ${CLOUD_TRIAL_URL:-}
+      # Optional: most guests one exercise takes (default 60)
+      GUEST_CAP_PER_EXERCISE: ${GUEST_CAP_PER_EXERCISE:-}
+      # Optional: upload size cap in bytes (default 104857600 = 100 MB)
+      MAX_ATTACHMENT_BYTES: ${MAX_ATTACHMENT_BYTES:-}
+      # Optional: uploads processed at once per process (default 4; 503 beyond)
+      MAX_CONCURRENT_UPLOADS: ${MAX_CONCURRENT_UPLOADS:-}
+      # Optional: S3-compatible object storage (AWS S3, R2, MinIO, B2) for
+      # evidence and exports instead of the uploads volume. Credentials use the
+      # AWS SDK's standard variables. See docs/configuration.md.
+      STORAGE_S3_BUCKET: ${STORAGE_S3_BUCKET:-}
+      STORAGE_S3_REGION: ${STORAGE_S3_REGION:-us-east-1}
+      STORAGE_S3_PREFIX: ${STORAGE_S3_PREFIX:-}
+      STORAGE_S3_ENDPOINT: ${STORAGE_S3_ENDPOINT:-}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID:-}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY:-}
+      AWS_REGION: ${AWS_REGION:-}
+      # Optional: salt for hashing client IPs in the activity log (unset = IPs not recorded)
+      ACTIVITY_IP_SALT: ${ACTIVITY_IP_SALT:-}
+      # Optional: closing an incident requires a FINAL postmortem, not just a draft
+      FEATURE_CLOSURE_REQUIRE_FINAL_POSTMORTEM: ${FEATURE_CLOSURE_REQUIRE_FINAL_POSTMORTEM:-}
+      # Optional: country calling code for phone numbers entered without "+" (default 1)
+      PHONE_DEFAULT_COUNTRY_CODE: ${PHONE_DEFAULT_COUNTRY_CODE:-1}
+    volumes:
+      - crucible_uploads:/app/uploads
+      # Custom delivery providers, mounted read-only. See providers/README.md.
+      - ./providers:/app/providers:ro
+    # Hardening (docs/install.md#image-hardening): read-only root filesystem,
+    # no Linux capabilities, no privilege escalation. The app writes only to
+    # the uploads volume and these tmpfs mounts.
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /app/.next/cache:uid=1001,gid=1001,mode=0700
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: unless-stopped
+
+  postgres:
+    # Pinned by digest (postgres:16). Update: docker buildx imagetools inspect postgres:16
+    image: postgres:16@sha256:ca0bd484cb98bf4b24eb1010e73fb3fcbd6714d240fbc1a10eea5b7dbecb641d
+    environment:
+      POSTGRES_USER: crucible
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: crucible
+    volumes:
+      - crucible_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U crucible"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    # Pinned by digest (redis:7). Update: docker buildx imagetools inspect redis:7
+    image: redis:7@sha256:4fa24486b8bcca8eec45ee0eb166edc674795e53a2b53d1a9ef263eecebaac85
+    volumes:
+      - crucible_redisdata:/data
+    restart: unless-stopped
+
+volumes:
+  crucible_pgdata:
+  crucible_redisdata:
+  crucible_uploads:

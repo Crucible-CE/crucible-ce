@@ -1,0 +1,2097 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../node_modules/.prisma/client"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Organization {
+  id                 String              @id @default(cuid())
+  name               String
+  slug               String              @unique
+  industry           String?
+  region             String?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  profileJson        Json?
+  // "Require two-factor sign-in for all members" (org-admin policy). When on,
+  // a signed-in member without an authenticator app or security key is
+  // funnelled to /mfa-setup-required until they enroll.
+  requireMfa         Boolean             @default(false)
+  users              User[]
+  incidents          Incident[]
+  escalationContacts EscalationContact[]
+  orgInvites         OrgInvite[]
+}
+
+model User {
+  id                   String               @id @default(cuid())
+  email                String               @unique
+  name                 String?
+  // Job title shown on the profile (onboarding "complete your profile").
+  jobTitle             String?
+  image                String?
+  emailVerified        DateTime?
+  passwordHash         String?
+  organizationId       String
+  role                 String               @default("contributor")
+  isActive             Boolean              @default(true)
+  tokenVersion         Int                  @default(1)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  lastLoginAt          DateTime?
+  notifications        Notification[]
+  activityLogs         UserActivityLog[]
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  preferences          UserPreferences?
+  reportedIncidents    Incident[]           @relation("IncidentReporter")
+  assignedIncidents    Incident[]           @relation("IncidentAssignee")
+  emailChangeRequest   EmailChangeRequest?
+  orgInvitesCreated    OrgInvite[]          @relation("OrgInviteCreator")
+  orgInviteUsed        OrgInvite?           @relation("OrgInviteUsedBy")
+  icsFeedTokens        IcsFeedToken[]
+  mfa                  UserMfa?
+  mfaRecoveryCodes     MfaRecoveryCode[]
+  webauthnCreds        WebAuthnCredential[]
+  webauthnChallenges   WebAuthnChallenge[]
+  mfaLoginTickets      MfaLoginTicket[]
+  // Exercises (CE v0.2). Relations only; no User columns.
+  exerciseParticipants Participant[]        @relation("ExerciseParticipantUser")
+  createdExercises     Exercise[]           @relation("ExerciseCreatedBy")
+  exerciseTemplates    ExerciseTemplate[]   @relation("ExerciseTemplateCreatedBy")
+  sourceDocuments      SourceDocument[]     @relation("SourceDocumentCreatedBy")
+  aarSignatures        AarSignature[]       @relation("AarSignatureUser")
+
+  @@index([organizationId])
+  @@index([email])
+}
+
+// ---------------------------------------------------------------------------
+// Multi-factor authentication (src/lib/auth/mfa, docs/authentication.md).
+// A user "has MFA" when totpEnabledAt is set or at least one WebAuthn
+// credential exists. Recovery codes exist only while MFA is on.
+// ---------------------------------------------------------------------------
+
+// Authenticator-app (TOTP, RFC 6238) state. Secrets are AES-256-GCM encrypted
+// with a MASTER_KEK-derived key (HKDF info "mfa-totp-v1").
+model UserMfa {
+  userId               String    @id
+  totpSecretEnc        String?
+  totpEnabledAt        DateTime?
+  // Highest accepted time-step counter: a code at or below it is a replay.
+  totpLastCounter      Int?
+  // In-progress enrollment (QR shown, first code not yet confirmed).
+  totpPendingSecretEnc String?
+  totpPendingCreatedAt DateTime?
+  recoveryGeneratedAt  DateTime?
+  // Database-backed cap on failed second-factor attempts (holds without
+  // Redis): at most N failures per window from browsers that are not a
+  // known device. Reserved atomically before each check, refunded on success.
+  mfaFailures          Int       @default(0)
+  mfaFailWindowStart   DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// Single-use recovery codes, stored as HMAC-SHA256 (MASTER_KEK-derived key,
+// info "mfa-recovery-v1"); the plaintext is shown once.
+model MfaRecoveryCode {
+  id        String    @id @default(cuid())
+  userId    String
+  codeHash  String
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, codeHash])
+  @@index([userId])
+}
+
+// A registered security key or passkey.
+model WebAuthnCredential {
+  id           String    @id @default(cuid())
+  userId       String
+  name         String
+  // base64url credential id.
+  credentialId String    @unique
+  publicKey    Bytes
+  // Signature counter (uint32); a response that does not increase it is rejected.
+  counter      BigInt    @default(0)
+  transports   String[]
+  aaguid       String?
+  deviceType   String?
+  backedUp     Boolean   @default(false)
+  createdAt    DateTime  @default(now())
+  lastUsedAt   DateTime?
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Server-side WebAuthn challenge: short TTL, deleted when used (single use).
+// purpose: "register" | "login" | "reauth". ticketId binds a login challenge
+// to the pending MFA sign-in it was issued for.
+model WebAuthnChallenge {
+  id        String   @id @default(cuid())
+  userId    String
+  purpose   String
+  challenge String   @unique
+  ticketId  String?
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([expiresAt])
+}
+
+// "Password accepted, second factor pending" sign-in ticket. The browser holds
+// a signed cookie naming this row; it is single use (consumedAt), expires in
+// 5 minutes, is bound to the user's tokenVersion, and is burned after too many
+// wrong codes.
+model MfaLoginTicket {
+  id             String    @id @default(cuid())
+  userId         String
+  tokenVersion   Int
+  expiresAt      DateTime
+  consumedAt     DateTime?
+  failedAttempts Int       @default(0)
+  createdAt      DateTime  @default(now())
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Email change request — active row while a user has requested a new email.
+// Stores the previous (verified) email + a one-time cancellation token sent
+// to that address. If the user clicks cancel within the grace window, we
+// revert the User.email back to oldEmail and re-mark verified.
+// ---------------------------------------------------------------------------
+model EmailChangeRequest {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  oldEmail              String
+  newEmail              String
+  cancellationTokenHash String   @unique
+  cancellationExpiresAt DateTime
+  createdAt             DateTime @default(now())
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([cancellationExpiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Org invite — admin-generated invite link for the organization. The
+// invitee joins with the role chosen at mint time.
+// ---------------------------------------------------------------------------
+model OrgInvite {
+  id                    String       @id @default(cuid())
+  tokenHash             String       @unique
+  organizationId        String
+  role                  String       @default("contributor")
+  createdById           String
+  inviteeName           String?
+  inviteeEmail          String?
+  expiresAt             DateTime
+  usedAt                DateTime?
+  usedByUserId          String?      @unique
+  revokedAt             DateTime?
+  // Per-invite trust grant: the registering invitee is created with
+  // emailVerified set and no verification token is issued. Chosen by the
+  // org admin at mint time.
+  skipEmailVerification Boolean      @default(false)
+  createdAt             DateTime     @default(now())
+  organization          Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  createdBy             User         @relation("OrgInviteCreator", fields: [createdById], references: [id])
+  usedBy                User?        @relation("OrgInviteUsedBy", fields: [usedByUserId], references: [id])
+
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([createdById, createdAt(sort: Desc)])
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Per-user activity log — append-only record of authentication events and
+// sensitive actions, including the connecting IP and user-agent. Used for
+// security timelines, support, and audit.
+//
+// Privacy notes:
+//   - `ipHash` stores a salted SHA-256 of the full IP for "is this the same
+//     network?" comparisons without retaining raw PII indefinitely.
+//   - `ipLastOctet` is kept in cleartext for triage ("matched 4 of 5 prior
+//     logins on .42"). For IPv6 it is the last hextet.
+//   - `userAgent` is stored verbatim; truncate at the call site if excessive.
+//
+// Volume notes:
+//   - Write only login/logout and sensitive mutations. Do NOT
+//     log every read endpoint — table grows fast.
+// ---------------------------------------------------------------------------
+model UserActivityLog {
+  id             BigInt   @id @default(autoincrement())
+  // Nullable so login.failure for an unknown/enumerated email is capturable
+  // (the credential-stuffing signal); emailHash carries the salted hash of the
+  // attacker-supplied email in that case — never the raw address.
+  userId         String?
+  organizationId String?
+  action         String // "login.success" | "login.failure" | "logout" | "password.changed" | "session.revoked" | "email.verified"
+  emailHash      String?
+  path           String?
+  method         String?
+  statusCode     Int?
+  ipHash         String?
+  ipLastOctet    String?
+  userAgent      String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now())
+  user           User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+  @@index([action, createdAt(sort: Desc)])
+}
+
+// ---------------------------------------------------------------------------
+// Onboarding ("Get ready") bookkeeping. Step COMPLETION is derived from real
+// data (lib/onboarding/steps.ts); this table persists only what cannot be
+// derived: the per-user welcome-modal dismissal, a hidden Ops Room card,
+// skipped optional steps (per user or per org), and the self-sent test page
+// (scope "user", key "test_page": its id doubles as the page id in the signed
+// ack link; value = { seq, sentAt, deliveredAt, channels, ackedAt, everAckedAt }).
+//   scope     = "user" | "org"
+//   subjectId = User.id | Organization.id
+// ---------------------------------------------------------------------------
+model OnboardingState {
+  id        String   @id @default(cuid())
+  scope     String
+  subjectId String
+  key       String
+  value     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, subjectId, key])
+  @@index([key])
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String
+  type        String
+  title       String
+  body        String
+  link        String? // deep-link to open on click
+  metadata    Json?
+  read        Boolean   @default(false)
+  readAt      DateTime?
+  dismissedAt DateTime?
+  createdAt   DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([userId, createdAt])
+  @@index([userId, dismissedAt])
+}
+
+model UserPreferences {
+  id     String @id @default(cuid())
+  userId String @unique
+  theme  String @default("dark")
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ---------------------------------------------------------------------------
+// Incident notification preference system (catalog: src/lib/notifications/catalog.ts)
+// Scalar FKs only (no Prisma relations), matching IncidentExport, so the User /
+// Organization / Incident models stay untouched.
+// ---------------------------------------------------------------------------
+
+// Per-user, per-category, per-channel toggle. Sparse: a missing row means
+// "use the category default". categoryCode + channel come from the catalog.
+model UserNotificationPref {
+  id           String  @id @default(cuid())
+  userId       String
+  categoryCode String
+  channel      String // in_app | push | email | sms
+  enabled      Boolean
+
+  @@unique([userId, categoryCode, channel])
+  @@index([userId])
+}
+
+// Per-user global delivery settings (quiet hours, DND, digest cadence).
+model UserNotificationSetting {
+  id                          String    @id @default(cuid())
+  userId                      String    @unique
+  timezone                    String    @default("UTC")
+  quietHoursStart             Int? // minutes from local midnight (e.g. 1320 = 22:00)
+  quietHoursEnd               Int? // minutes from local midnight (e.g. 420 = 07:00)
+  dndUntil                    DateTime? // snooze everything (except critical) until this time
+  digestCadence               String    @default("off") // off | hourly | daily
+  digestLastSentAt            DateTime?
+  // Opt-in per-user SMS/voice number for incident alerts. Falls back to a
+  // linked EscalationContact.phone when unset (or unverified).
+  // Toll-fraud guard: the delivery engine and notify() dial it only when it is
+  // VERIFIED (notificationPhoneVerifiedAt, set by the SMS code below) or an
+  // administrator set allowUnverifiedPhone. Changing the number clears both.
+  notificationPhone           String?
+  notificationPhoneVerifiedAt DateTime?
+  allowUnverifiedPhone        Boolean   @default(false)
+  // Pending SMS verification code: HMAC of the 6-digit code (never the code),
+  // the number it was sent to, expiry (10 min) and wrong-guess count (max 5).
+  phoneOtpHash                String?
+  phoneOtpPhone               String?
+  phoneOtpExpiresAt           DateTime?
+  phoneOtpAttempts            Int       @default(0)
+  updatedAt                   DateTime  @updatedAt
+}
+
+// Metered (SMS / voice) sends that are NOT page deliveries: notify() SMS,
+// phone verification codes and contact verification links. Counted together
+// with PageDelivery rows by the anti toll-fraud rate limits (per number, per
+// org, per-number ceiling), so no SMS path can bypass them.
+model MeteredSend {
+  id             String   @id @default(cuid())
+  organizationId String
+  channel        String // sms | voice
+  destination    String // E.164
+  purpose        String // notify | phone_otp | contact_verify | test_page
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId, channel, createdAt])
+  @@index([destination, channel, createdAt])
+}
+
+// Org-admin lock for a category+channel. Absence = user_choice.
+//   user_choice — user decides (default)
+//   force_on    — always delivered, user cannot disable
+//   force_off   — never delivered, user cannot enable
+model OrgNotificationPolicy {
+  id             String   @id @default(cuid())
+  organizationId String
+  categoryCode   String
+  channel        String
+  lock           String // user_choice | force_on | force_off
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, categoryCode, channel])
+  @@index([organizationId])
+}
+
+// Org-wide notification floors (one row per org).
+model OrgNotificationDefault {
+  id                String   @id @default(cuid())
+  organizationId    String   @unique
+  criticalBreaksDnd Boolean  @default(true) // critical pages ignore quiet hours/DND
+  updatedById       String?
+  updatedAt         DateTime @updatedAt
+}
+
+// Per-user follow/mute of a specific incident.
+model IncidentSubscription {
+  id         String   @id @default(cuid())
+  userId     String
+  incidentId String
+  mode       String // watch | mute
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, incidentId])
+  @@index([incidentId])
+}
+
+// Pending low-urgency notifications awaiting a digest flush.
+model NotificationDigestItem {
+  id           String   @id @default(cuid())
+  userId       String
+  categoryCode String
+  title        String
+  body         String
+  link         String?
+  incidentId   String?
+  createdAt    DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Incident-handling program (scalar FKs only). Scope board, action board,
+// indicators, links, status updates, corrective actions, SLAs, presence.
+// ---------------------------------------------------------------------------
+
+// Affected asset (blast-radius / scope board).
+model IncidentAsset {
+  id                 String    @id @default(cuid())
+  organizationId     String
+  incidentId         String
+  name               String
+  assetType          String    @default("host") // host | account | service | data_store | network | application | other
+  identifier         String? // hostname / IP / username / etc.
+  criticality        String    @default("medium") // critical | high | medium | low
+  status             String    @default("affected") // affected | investigating | contained | eradicated | clean
+  // Scope enhancement: regulated-data classification (drives notification),
+  // owning team, when containment was reached, and provenance if promoted
+  // from an IOC indicator.
+  dataClassification String? // pii | phi | pci | financial | ip | confidential | none
+  owner              String? // owning team / individual
+  containedAt        DateTime? // stamped when status first reaches contained/eradicated/clean
+  sourceIndicatorId  String? // the IncidentIndicator this asset was promoted from
+  notes              String?
+  createdById        String
+  // Soft-delete tombstone — read paths filter deletedAt: null; the
+  // undo toast restores by clearing it.
+  deletedAt          DateTime?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  @@index([incidentId, deletedAt])
+  @@index([organizationId])
+}
+
+// Containment / eradication / recovery action. High-risk actions require
+// approval (IC or Exec Sponsor). The platform records, never executes.
+model IncidentAction {
+  id               String    @id @default(cuid())
+  organizationId   String
+  incidentId       String
+  phase            String // containment | eradication | recovery
+  title            String
+  description      String?
+  status           String    @default("proposed") // proposed | approved | in_progress | done | verified | rejected | cancelled
+  highRisk         Boolean   @default(false)
+  approvalStatus   String    @default("not_required") // not_required | pending | approved | rejected
+  approvedById     String?
+  approvedByName   String?
+  approvedAt       DateTime?
+  rejectedReason   String?
+  requestedById    String
+  assignedToId     String?
+  dueAt            DateTime? // ETA / target time for this action
+  // Assets this action targets (ids of IncidentAsset) — links response to scope.
+  assetIdsJson     Json      @default("[]")
+  verificationNote String?
+  // Soft-delete tombstone — read paths filter deletedAt: null.
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([incidentId, deletedAt])
+  @@index([organizationId])
+}
+
+// Command-level "Key Indicator" — curated incident-defining IOC, for awareness,
+// sharing (ISAC/CISA) and the case file. Not a tactical hunting TIP.
+model IncidentIndicator {
+  id               String    @id @default(cuid())
+  organizationId   String
+  incidentId       String
+  indicatorType    String // ip | domain | url | file_hash | email | account | host | other
+  value            String
+  status           String    @default("active") // active | blocked | false_positive
+  source           String? // SIEM, analyst, OSINT, vendor
+  note             String?
+  sharedExternally Boolean   @default(false)
+  createdById      String
+  // Soft-delete tombstone — read paths filter deletedAt: null.
+  deletedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  @@index([incidentId, deletedAt])
+  @@index([organizationId])
+}
+
+// Link between incidents (related / duplicate / parent / child).
+model IncidentLink {
+  id                String   @id @default(cuid())
+  organizationId    String
+  incidentId        String
+  relatedIncidentId String
+  relationType      String // related | duplicate | parent | child
+  createdById       String
+  createdAt         DateTime @default(now())
+
+  @@unique([incidentId, relatedIncidentId, relationType])
+  @@index([incidentId])
+  @@index([relatedIncidentId])
+}
+
+// Customer/public status update (external comms cadence), distinct from
+// internal stakeholder notifications.
+model IncidentStatusUpdate {
+  id                  String    @id @default(cuid())
+  organizationId      String
+  incidentId          String
+  audience            String    @default("customer") // customer | public | internal
+  headline            String
+  body                String
+  publishedById       String
+  publishedByName     String?
+  // Retraction marker. The update stays visible (greyed, badged) and
+  // the original status_update_published ledger row is retained — an
+  // unpublish never implies the statement was never public.
+  unpublishedAt       DateTime?
+  editedAt            DateTime?
+  // Posted to the incident's public status page (null = not on the page).
+  publishedToPageAt   DateTime?
+  publishedToPageById String?
+  createdAt           DateTime  @default(now())
+
+  @@index([incidentId, createdAt])
+}
+
+// Corrective action / lesson learned from a postmortem, tracked to closure.
+model IncidentCorrectiveAction {
+  id             String    @id @default(cuid())
+  organizationId String
+  incidentId     String
+  title          String
+  description    String?
+  ownerId        String?
+  ownerName      String?
+  dueAt          DateTime?
+  status         String    @default("open") // open | in_progress | done | cancelled
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([incidentId])
+  @@index([organizationId, status])
+}
+
+// Org-configured internal response SLA target (severity x milestone -> minutes).
+model OrgIncidentSla {
+  id             String   @id @default(cuid())
+  organizationId String
+  severity       String // critical | high | medium | low
+  milestone      String // ack | contain | resolve | first_update
+  targetMinutes  Int
+  updatedById    String?
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, severity, milestone])
+  @@index([organizationId])
+}
+
+// Lightweight war-room presence (who is actively in the room), heartbeat-updated.
+model IncidentPresence {
+  id             String   @id @default(cuid())
+  organizationId String
+  incidentId     String
+  userId         String
+  userName       String?
+  lastSeenAt     DateTime @default(now())
+
+  @@unique([incidentId, userId])
+  @@index([incidentId, lastSeenAt])
+}
+
+model AdminAuditLog {
+  id             BigInt   @id @default(autoincrement())
+  actorUserId    String
+  actorEmail     String?
+  actorName      String?
+  organizationId String? // org the action affects
+  action         String
+  targetType     String
+  targetId       String?
+  targetLabel    String?
+  metadataJson   Json?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  @@index([action])
+  @@index([createdAt(sort: Desc)])
+  @@index([organizationId, createdAt(sort: Desc)])
+}
+
+model Incident {
+  id                       String                            @id @default(cuid())
+  organizationId           String
+  reportedById             String
+  assignedToId             String?
+  title                    String
+  description              String
+  severity                 String                            @default("medium") // critical, high, medium, low
+  status                   String                            @default("open") // open, investigating, contained, eradicated, recovered, closed
+  source                   String                            @default("manual") // manual, siem, alert
+  category                 String? // e.g. "malware", "phishing", "data_breach", "unauthorized_access"
+  affectedSystems          Json?
+  timelineJson             Json? // [{ timestamp, event, userId }]
+  mitreJson                Json? // MITRE ATT&CK technique ids
+  // Major-incident business-impact assessment: { affectedServices[],
+  // customerImpact, revenueImpact, notes, severityScore }.
+  businessImpactJson       Json?
+  declaredAt               DateTime? // when formally declared
+  containedAt              DateTime?
+  resolvedAt               DateTime?
+  // Closure disposition (SOC best practice: every closure has a classification).
+  // null = open/unclassified. "true_positive" = real incident handled;
+  // "false_positive" = not a real incident; "benign" = real-but-authorized.
+  closureDisposition       String? // true_positive | false_positive | benign
+  closureReason            String? // category code (esp. for false positives, drives detection tuning)
+  closureNote              String? // free-text justification
+  closedById               String?
+  closedAt                 DateTime?
+  // War-room live bridge (conference/phone link).
+  bridgeUrl                String?
+  // Structured business-impact quantification (feeds exec reporting).
+  recordsAffected          Int?
+  customersAffected        Int?
+  downtimeMinutes          Int?
+  estimatedCostUsd         Int?
+  impactDataTypesJson      Json? // categories of data affected (PII, PHI, PCI, ...)
+  // When true (locked), only the listed participants, org administrators and
+  // the incident commander may see this incident; it is hidden from the
+  // org-wide list, search and sockets. The reporter/assignee are auto-added as
+  // removable participants. Pages to anyone else are redacted.
+  restricted               Boolean                           @default(false)
+  // Lock bookkeeping: when the lock was set and who held the incident
+  // commander seat at that moment. Unlock = an administrator, or that IC.
+  lockedAt                 DateTime?
+  lockedIcUserId           String?
+  // Soft delete (administrator only, audited). The ledger is preserved; every
+  // incident list/lookup excludes deleted incidents (lib/incident/access).
+  deletedAt                DateTime?
+  deletedById              String?
+  // Ledger head anchor: last appended ledger entry, updated atomically by
+  // appendLedger inside the same tx. Makes tail truncation detectable
+  // (verifyLedgerAnchored) — the per-row hash chain alone cannot reveal
+  // missing tail entries. ledgerHeadSig is an optional Ed25519 signature over
+  // "incidentId|seq|entryHash" (EXPORT_SIGNING_PRIVATE_KEY; null when unset).
+  // ledgerHeadKeyId = fingerprint of the signing public key that made
+  // ledgerHeadSig (null = written before a signing key was configured), so a
+  // rotated key reads as key_mismatch rather than tampering.
+  ledgerSeq                Int?
+  ledgerHead               String?
+  ledgerHeadSig            String?
+  ledgerHeadKeyId          String?
+  ledgerHeadAt             DateTime?
+  // Onboarding sandbox (lib/incident/training): one per member, reportedById =
+  // the learner. Never pages, notifies, emails or posts anywhere, and is left
+  // out of every list, metric, SLA, report, readiness input and export.
+  isTraining               Boolean                           @default(false)
+  createdAt                DateTime                          @default(now())
+  updatedAt                DateTime                          @updatedAt
+  organization             Organization                      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  reportedBy               User                              @relation("IncidentReporter", fields: [reportedById], references: [id])
+  assignedTo               User?                             @relation("IncidentAssignee", fields: [assignedToId], references: [id])
+  activityLog              IncidentActivity[]
+  chatMessages             IncidentChatMessage[]
+  evidence                 IncidentEvidence[]
+  sitreps                  IncidentSitrep[]
+  stakeholderNotifications IncidentStakeholderNotification[]
+  handovers                IncidentHandover[]
+  ledgerEntries            IncidentLedgerEntry[]
+  decisions                IncidentDecision[]
+  tasks                    IncidentTask[]
+  roleAssignments          IncidentRoleAssignment[]
+  participants             IncidentParticipant[]
+  intelPosts               IncidentIntelPost[]
+  calendarEvents           IncidentCalendarEvent[]
+  postmortem               IncidentPostmortem?
+  pages                    IncidentPage[]
+  icsFeedTokens            IcsFeedToken[]
+  guestInvites             IncidentGuestInvite[]
+  statusPage               IncidentStatusPage?
+  playbookRuns             IncidentPlaybookRun[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, severity])
+  @@index([organizationId, deletedAt])
+  @@index([assignedToId])
+  // Hot list ordering — org-scoped lists order by (createdAt desc, id desc).
+  @@index([organizationId, createdAt, id])
+  @@index([reportedById, isTraining])
+}
+
+// Paging with ack-timeout escalation: a persistent page record the escalation
+// engine scans. If unacked by ackDeadlineAt, it escalates up the call tree.
+// Every page and escalation also fans out out-of-band (src/lib/delivery): one
+// PageDelivery row per provider attempt.
+model IncidentPage {
+  id               String    @id @default(cuid())
+  organizationId   String
+  incidentId       String
+  targetUserId     String?
+  targetContactId  String? // EscalationContact (scalar) when paging an external
+  targetLabel      String?
+  message          String?
+  priority         String    @default("high") // high | critical
+  status           String    @default("sent") // sent | acked | expired | cancelled
+  escalationLevel  Int       @default(0)
+  ackDeadlineAt    DateTime?
+  acknowledgedAt   DateTime?
+  acknowledgedById String?
+  acknowledgedVia  String? // app | link | sms | voice
+  cancelledAt      DateTime? // the incident closed while this page was still open
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  incident   Incident       @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  deliveries PageDelivery[]
+
+  @@index([incidentId])
+  @@index([status, ackDeadlineAt])
+}
+
+// One out-of-band delivery attempt of a page (or escalation) through one
+// provider. Idempotent on (pageId, level, provider, attempt): the escalation
+// level is part of the key because an escalation re-targets the SAME page row.
+// A failed attempt carries nextRetryAt until the retry cron claims it.
+model PageDelivery {
+  id             String    @id @default(cuid())
+  organizationId String
+  pageId         String
+  incidentId     String
+  level          Int       @default(0) // IncidentPage.escalationLevel at send time
+  kind           String    @default("page") // page | escalation
+  provider       String // smtp | resend | twilio-sms | twilio-voice | webhook[-N] | <plugin id>
+  channel        String // email | sms | voice | push | webhook | custom
+  recipientName  String?
+  destination    String? // address actually targeted (email / E.164): audit + rate limits
+  status         String    @default("pending") // pending | sent | failed | skipped
+  attempt        Int       @default(1)
+  providerRef    String? // provider message id (Twilio SID, SMTP Message-ID, ...)
+  error          String? // failure reason, or why it was skipped
+  nextRetryAt    DateTime? // failed with a retry scheduled; cleared once claimed/abandoned
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  page IncidentPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, level, provider, attempt])
+  @@index([pageId])
+  @@index([nextRetryAt])
+  @@index([organizationId, channel, createdAt])
+  @@index([destination, channel, createdAt])
+  @@index([providerRef])
+}
+
+// Blameless incident postmortem, following current cyber/SRE post-incident practice:
+// key facts, response metrics (MTTD/MTTR/dwell/containment), a detection→recovery
+// timeline, impact, *contributing factors* (not a single root cause), what went
+// well / poorly, and tracked action items with owners + due dates.
+model IncidentPostmortem {
+  id                      String    @id @default(cuid())
+  organizationId          String
+  incidentId              String    @unique
+  status                  String    @default("draft") // draft | in_review | final
+  summary                 String? // executive summary
+  incidentStartAt         DateTime? // when the activity actually began (for dwell/MTTD)
+  // metricsJson: { mttdMinutes, mttrMinutes, dwellMinutes, containmentMinutes }
+  metricsJson             Json?
+  // impactJson: { systems[], customersAffected, dataRecords, financial, regulatory, notes }
+  impactJson              Json?
+  // timelineJson: [{ at, label, kind }]
+  timelineJson            Json?
+  // contributingFactorsJson: [{ factor, category }]  (category: process|technical|human|external|detection)
+  contributingFactorsJson Json?
+  wentWellJson            Json? // [string]
+  wentPoorlyJson          Json? // [string]
+  // actionItemsJson: [{ id, title, owner, ownerId, dueAt, status }]
+  actionItemsJson         Json?
+  lessonsLearned          String?
+  createdById             String?
+  createdByName           String?
+  finalizedAt             DateTime?
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+}
+
+// ---------------------------------------------------------------------------
+// ICS subscription feed token — one standing calendar-feed secret per
+// (user, incident). Only the SHA-256 of the token is stored. A feed request
+// re-checks that the owning user is still active and can still see the
+// incident; tokens are revoked (revokedAt) on participant removal, user
+// deactivation, or when the user copies a fresh link (one live link each).
+// ---------------------------------------------------------------------------
+model IcsFeedToken {
+  id             String    @id @default(cuid())
+  organizationId String
+  incidentId     String
+  userId         String
+  tokenHash      String    @unique
+  createdAt      DateTime  @default(now())
+  lastUsedAt     DateTime?
+  revokedAt      DateTime?
+  incident       Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, userId])
+  @@index([userId])
+}
+
+// User-created calendar items for an incident (meetings, reviews, reminders,
+// custom deadlines), optionally assigned to a responder. Distinct from the
+// derived calendar items (task due dates / milestones), which are computed on
+// the fly and not stored here.
+model IncidentCalendarEvent {
+  id             String    @id @default(cuid())
+  organizationId String
+  incidentId     String
+  title          String
+  notes          String?
+  eventType      String    @default("meeting") // meeting | deadline | reminder | review | milestone | other
+  startAt        DateTime
+  endAt          DateTime?
+  assigneeId     String?
+  assigneeName   String?
+  status         String    @default("scheduled") // scheduled | done | cancelled
+  createdById    String?
+  createdByName  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, startAt])
+  @@index([assigneeId])
+}
+
+// The allowlist for a (usually restricted) incident: one row per org member.
+// Names are denormalized to match the IncidentChatMessage convention (no User
+// back-relation).
+model IncidentParticipant {
+  id             String   @id @default(cuid())
+  organizationId String
+  incidentId     String
+  userId         String?
+  userName       String
+  userEmail      String?
+  role           String   @default("responder") // responder | observer
+  addedById      String?
+  addedByName    String?
+  createdAt      DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, userId])
+  @@index([incidentId])
+  @@index([userId])
+}
+
+// Persistent, curated intel board for an incident (links, IOCs, OSINT,
+// observations) — distinct from ephemeral chat. Items can be pinned.
+model IncidentIntelPost {
+  id             String   @id @default(cuid())
+  organizationId String
+  incidentId     String
+  authorId       String?
+  authorName     String
+  title          String
+  body           String?
+  url            String?
+  tag            String   @default("reference") // osint | ioc | reference | observation | media
+  pinned         Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+  @@index([incidentId, pinned])
+}
+
+model IncidentActivity {
+  id         String   @id @default(cuid())
+  incidentId String
+  userId     String
+  userName   String?
+  action     String // declared, status_changed, note_added, resolved, ...
+  notes      String?
+  metadata   Json?
+  timestamp  DateTime @default(now())
+  incident   Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, timestamp(sort: Desc)])
+}
+
+// Live war-room chat. Distinct from the timeline (IncidentActivity) and the
+// tamper-evident ledger — this is real-time responder coordination. Append-only
+// in practice (no edit/delete UI) and surfaced under the evidentiary notice.
+model IncidentChatMessage {
+  id             String   @id @default(cuid())
+  incidentId     String
+  organizationId String
+  userId         String
+  userName       String
+  message        String
+  createdAt      DateTime @default(now())
+  incident       Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+}
+
+// Incident evidence — uploaded artifacts (documents, images, archives, logs).
+// The bytes live on disk (local in dev); this row is the auditable record:
+// original filename, size, content-type, and a SHA-256 of the bytes for
+// chain-of-custody. Every upload also writes an `evidence_added` entry to the
+// tamper-evident ledger, so the hash is committed into the incident's chain.
+model IncidentEvidence {
+  id             String                   @id @default(cuid())
+  incidentId     String
+  organizationId String
+  uploadedById   String
+  uploadedByName String?
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  category       String? // logs | screenshots | forensics | comms | malware | other
+  description    String?
+  createdAt      DateTime                 @default(now())
+  incident       Incident                 @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  accesses       IncidentEvidenceAccess[]
+
+  @@index([incidentId, createdAt])
+}
+
+// Chain-of-custody access log — who viewed/downloaded a piece of evidence, when.
+model IncidentEvidenceAccess {
+  id         String           @id @default(cuid())
+  evidenceId String
+  userId     String
+  userName   String?
+  action     String // download | verify
+  createdAt  DateTime         @default(now())
+  evidence   IncidentEvidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@index([evidenceId, createdAt])
+}
+
+// Situation report — a point-in-time summary of the incident for execs/board,
+// generated from the incident state + ledger. Persisted so the
+// SITREP history is auditable.
+model IncidentSitrep {
+  id              String   @id @default(cuid())
+  incidentId      String
+  organizationId  String
+  content         String
+  generatedById   String
+  generatedByName String?
+  createdAt       DateTime @default(now())
+  incident        Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+}
+
+// Stakeholder notification tracker — who needs to be told, through what channel,
+// and whether they have been. Covers regulators, board, customers, insurer,
+// breach counsel, law enforcement, partners.
+model IncidentStakeholderNotification {
+  id             String    @id @default(cuid())
+  incidentId     String
+  organizationId String
+  userId         String? // set when the stakeholder is an internal org member
+  stakeholder    String // e.g. "Board", "Cyber Insurer", "Customers", "Regulator — NY DFS"
+  channel        String? // e.g. "email", "phone", "portal", "press release"
+  status         String    @default("pending") // pending | notified | acknowledged | not_required
+  notes          String?
+  notifiedAt     DateTime?
+  createdById    String
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  incident       Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, status])
+}
+
+// Shift / responder handover log — clean handoffs for 24/7 incidents. Captures
+// current state, what changed this shift, and open items for the next responder.
+model IncidentHandover {
+  id             String    @id @default(cuid())
+  incidentId     String
+  organizationId String
+  fromUserId     String
+  fromUserName   String?
+  toUserId       String? // on-coming responder (paged to accept)
+  toLabel        String? // next shift / responder, free text
+  summary        String // the handover briefing
+  openItems      String?
+  status         String    @default("pending") // pending | accepted
+  acceptedById   String?
+  acceptedByName String?
+  acceptedAt     DateTime?
+  createdAt      DateTime  @default(now())
+  incident       Incident  @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, createdAt])
+}
+
+// Tamper-evident incident ledger. Append-only, SHA-256 hash-chained
+// record of every incident-significant event:
+//   entryHash = sha256(prevHash + canonical(payloadJson) + seq + createdAt)
+// The first entry per incident uses a fixed genesis hash as prevHash. Written
+// only via src/lib/ledger/append.ts (single write path); never updated/deleted.
+model IncidentLedgerEntry {
+  id             String   @id @default(cuid())
+  organizationId String // denormalized for org-scoped queries
+  incidentId     String
+  seq            Int // monotonic per incident, starts at 1
+  actorUserId    String?
+  actorLabel     String?
+  eventType      String // see LedgerEventType in src/lib/ledger/append.ts
+  payloadJson    Json
+  prevHash       String
+  entryHash      String
+  // Fingerprint of the ledger HMAC key (derived from MASTER_KEK) the entry was
+  // hashed under: tells "MASTER_KEK changed" (key_mismatch) from tampering.
+  keyId          String?
+  createdAt      DateTime @default(now()) @db.Timestamptz(6)
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, seq])
+  @@index([organizationId, incidentId])
+  @@index([incidentId, seq])
+}
+
+// Live incident command center. Every mutation appends to the ledger and
+// emits a Socket.io "changed" event (clients refetch; the bus carries no state).
+model IncidentDecision {
+  id             String    @id @default(cuid())
+  organizationId String
+  incidentId     String
+  title          String
+  context        String?
+  options        Json? // considered options
+  decision       String?
+  rationale      String?
+  decidedById    String?
+  status         String    @default("open") // open | decided | deferred
+  dueAt          DateTime?
+  decidedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId, status])
+}
+
+model IncidentTask {
+  id               String    @id @default(cuid())
+  organizationId   String
+  incidentId       String
+  title            String
+  description      String?
+  assigneeId       String?
+  // Action-ticket: assignment provenance + an explicit acknowledge (accept) step.
+  assignedById     String?
+  assignedAt       DateTime?
+  acknowledgedById String?
+  acknowledgedAt   DateTime?
+  status           String    @default("open") // open | acknowledged | in_progress | blocked | done
+  priority         String    @default("medium") // low | medium | high | critical
+  dueAt            DateTime?
+  completedAt      DateTime?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  incident    Incident                 @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  comments    IncidentTaskComment[]
+  attachments IncidentTaskAttachment[]
+
+  @@index([incidentId, status])
+  @@index([assigneeId])
+}
+
+// Action-ticket response thread — assignee + responders converse on a task.
+model IncidentTaskComment {
+  id             String   @id @default(cuid())
+  organizationId String
+  incidentId     String
+  taskId         String
+  authorId       String?
+  authorName     String
+  body           String
+  createdAt      DateTime @default(now())
+
+  task IncidentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+// Action-ticket attachment — evidence-grade (SHA-256 hashed, ledgered) so
+// "upload information" on a ticket is itself defensible. Bytes live in the same
+// evidence blob store, keyed by this row's id.
+model IncidentTaskAttachment {
+  id             String   @id @default(cuid())
+  organizationId String
+  incidentId     String
+  taskId         String
+  uploadedById   String?
+  uploadedByName String?
+  filename       String
+  mimeType       String
+  sizeBytes      Int
+  sha256         String
+  createdAt      DateTime @default(now())
+
+  task IncidentTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  @@index([taskId, createdAt])
+}
+
+model IncidentRoleAssignment {
+  id                  String   @id @default(cuid())
+  organizationId      String
+  incidentId          String
+  role                String // incident_commander | comms_lead | legal_lead | tech_lead | exec_sponsor | scribe
+  userId              String?
+  escalationContactId String? // external assignee via EscalationContact (scalar)
+  assignedAt          DateTime @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@unique([incidentId, role])
+  @@index([incidentId])
+}
+
+// ---------------------------------------------------------------------------
+// Escalation Matrix
+// ---------------------------------------------------------------------------
+
+model EscalationContact {
+  id                         String    @id @default(cuid())
+  organizationId             String
+  name                       String
+  title                      String?
+  email                      String?
+  phone                      String?
+  alternatePhone             String?
+  tier                       Int       @default(1) // 1=primary, 2=secondary, 3=escalation
+  severityLevel              String    @default("any") // "any" | "high" | "critical"
+  role                       String // "technical" | "executive" | "legal" | "pr" | "vendor" | "regulator" | "other"
+  // Optional link to an internal user (scalar, no relation) — lets the matrix
+  // be the single recipient source: linked contacts get app push, others get
+  // SMS/email/voice.
+  userId                     String?
+  notes                      String?
+  isActive                   Boolean   @default(true)
+  sortOrder                  Int       @default(0)
+  // Toll-fraud guard: SMS/voice pages go only to a VERIFIED phone
+  // (phoneVerifiedAt set) unless an administrator sets this override.
+  allowUnverifiedPhone       Boolean   @default(false)
+  // Email and phone are verified SEPARATELY: the emailed link proves the
+  // mailbox (emailVerifiedAt), the SMS link proves the phone (phoneVerifiedAt).
+  // Changing an address clears its own verification. Verification cadence: a
+  // channel unverified for > 90 days is stale (matrix UI + weekly cron).
+  emailVerifiedAt            DateTime?
+  phoneVerifiedAt            DateTime?
+  verificationTokenHash      String? // sha256 of the emailed one-click confirm token
+  verificationSentAt         DateTime?
+  phoneVerificationTokenHash String? // sha256 of the SMS confirm-link token
+  phoneVerificationSentAt    DateTime?
+  createdAt                  DateTime  @default(now())
+  updatedAt                  DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, isActive])
+  @@index([organizationId, tier])
+  @@index([userId])
+}
+
+// ---------------------------------------------------------------------------
+// Incident Case File — a signed, encrypted, point-in-time export of the entire
+// incident (for legal counsel / regulators / forensics). Integrity rests on the
+// hash-chained ledger + a signed manifest. Scalar FKs (additive).
+// ---------------------------------------------------------------------------
+model IncidentExport {
+  id              String    @id @default(cuid())
+  incidentId      String
+  organizationId  String
+  requestedById   String
+  requestedByName String?
+  mode            String // legal | regulator | internal
+  status          String    @default("running") // running | ready | failed
+  packageHash     String? // sha256 of the encrypted package
+  ledgerHead      String? // ledger chain-head entryHash captured at export time
+  storagePath     String? // storage key for the encrypted package
+  sizeBytes       Int?
+  passphraseEnc   String? // AES-encrypted passphrase; shown once then cleared
+  error           String?
+  createdAt       DateTime  @default(now())
+  completedAt     DateTime?
+
+  @@index([incidentId, createdAt])
+  @@index([organizationId])
+}
+
+// ===========================================================================
+// Exercises (CE v0.2). Tabletop exercises, templates, documents and the
+// after-action record. Additive: no CE table changes shape.
+//
+// organizationId is a scalar FK on every table (same convention as
+// IncidentExport). Its default is ce_default_org_id(), the install's
+// organization, so one-org installs never pass it by hand.
+// JSON columns hold { schemaVersion, ... } and are parsed with zod on read.
+// `secret` columns hold hidden scoring data and are never selected by player
+// routes.
+// ===========================================================================
+
+// Exercise settings for the organization (one row per org).
+model ExerciseSettings {
+  organizationId        String   @id @default(dbgenerated("ce_default_org_id()"))
+  timezone              String   @default("UTC")
+  capabilityFramework   String   @default("nist-csf") // fema | nist-csf | custom
+  enabledFrameworks     String[] @default([])
+  hseepMode             Boolean  @default(true)
+  requireSponsorSignoff Boolean  @default(true)
+  policy                Json     @default("{}")
+  retentionYears        Int      @default(7)
+  // Org-wide switch for the "Cloud does this with AI" notes (administrators, default on).
+  showCloudNotes        Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model GuestSession {
+  id             String      @id @default(cuid())
+  organizationId String      @default(dbgenerated("ce_default_org_id()"))
+  tokenHash      String      @unique
+  exerciseId     String
+  participantId  String
+  expiresAt      DateTime
+  createdAt      DateTime    @default(now())
+  exercise       Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId])
+  @@index([expiresAt])
+}
+
+model Capability {
+  id             String  @id @default(cuid())
+  organizationId String  @default(dbgenerated("ce_default_org_id()"))
+  framework      String // fema | nist-csf | custom
+  key            String
+  name           String
+  description    String?
+  seq            Int     @default(0)
+  isActive       Boolean @default(true)
+
+  ratings      CapabilityRating[]
+  observations Observation[]
+  actionItems  ActionItem[]
+
+  @@unique([framework, key])
+  @@index([organizationId])
+}
+
+// Uploaded exercise files (source documents, final report PDFs). Bytes live in
+// the CE storage provider under exercise-files/, encrypted with the org key.
+model StoredFile {
+  id             String   @id @default(cuid())
+  organizationId String   @default(dbgenerated("ce_default_org_id()"))
+  path           String   @unique
+  mime           String
+  size           Int
+  sha256         String
+  originalName   String
+  createdAt      DateTime @default(now())
+
+  documents SourceDocument[]
+  finalPdfs AfterActionReport[] @relation("AarFinalPdf")
+
+  @@index([organizationId])
+}
+
+model SourceDocument {
+  id             String      @id @default(cuid())
+  organizationId String      @default(dbgenerated("ce_default_org_id()"))
+  kind           String // playbook | bcp_dr | crisis_comm | threat_briefing | sop | policy | other
+  title          String
+  /// library: shipped with CE, read-only, duplicated to edit. local: added by the organization.
+  scope          String      @default("local")
+  /// Stable key of a library document (src/lib/exercise/library). Null for local documents.
+  libraryKey     String?
+  /// Library collection label, for example "Healthcare data analytics on Azure".
+  collection     String?
+  fileId         String?
+  text           String
+  sha256         String
+  sections       Json        @default("[]")
+  createdById    String?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  file           StoredFile? @relation(fields: [fileId], references: [id], onDelete: SetNull)
+  createdBy      User?       @relation("SourceDocumentCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  exercises Exercise[]
+
+  @@unique([organizationId, libraryKey])
+  @@index([organizationId])
+}
+
+model ExerciseTemplate {
+  id             String   @id @default(cuid())
+  organizationId String   @default(dbgenerated("ce_default_org_id()"))
+  mode           String // crisissim | document | strategic
+  title          String
+  summary        String?
+  scope          String   @default("local") // library | local
+  /// Library collection label, for example "Healthcare data analytics on Azure". Null for the core library and local templates.
+  collection     String?
+  status         String   @default("draft") // draft | published | archived
+  version        Int      @default(1)
+  config         Json     @default("{}")
+  objectives     Json     @default("[]")
+  branching      String   @default("linear") // linear | branched
+  sourceId       String?
+  createdById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  createdBy      User?    @relation("ExerciseTemplateCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  injects   TemplateInject[]
+  branches  TemplateBranch[]
+  exercises Exercise[]
+  rubrics   Rubric[]
+  schedules ExerciseSchedule[]
+
+  @@index([mode, status])
+  @@index([organizationId])
+}
+
+model TemplateInject {
+  id                String           @id @default(cuid())
+  organizationId    String           @default(dbgenerated("ce_default_org_id()"))
+  templateId        String
+  nodeId            String
+  seq               Int
+  title             String
+  scenarioOffsetMin Int              @default(0)
+  plannedDelayMin   Int?
+  targetTeams       String[]         @default([])
+  expectedActions   Json             @default("[]")
+  objectiveKeys     String[]         @default([])
+  content           Json             @default("{}")
+  secret            Json             @default("{}")
+  position          Json             @default("{}")
+  template          ExerciseTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@unique([templateId, nodeId])
+  @@index([templateId, seq])
+}
+
+model TemplateBranch {
+  id             String           @id @default(cuid())
+  organizationId String           @default(dbgenerated("ce_default_org_id()"))
+  templateId     String
+  fromNodeId     String
+  toNodeId       String
+  condition      Json             @default("{}")
+  priority       Int              @default(0)
+  template       ExerciseTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([templateId, fromNodeId])
+}
+
+model Rubric {
+  id             String            @id @default(cuid())
+  organizationId String            @default(dbgenerated("ce_default_org_id()"))
+  templateId     String?
+  exerciseId     String?
+  questionKey    String
+  criteria       Json              @default("[]")
+  modelAnswer    String?
+  maxScore       Int               @default(4)
+  capabilityKey  String?
+  createdAt      DateTime          @default(now())
+  template       ExerciseTemplate? @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  exercise       Exercise?         @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId, questionKey])
+  @@index([templateId, questionKey])
+}
+
+model Exercise {
+  id               String    @id @default(cuid())
+  organizationId   String    @default(dbgenerated("ce_default_org_id()"))
+  mode             String // crisissim | document | strategic
+  title            String
+  status           String    @default("draft") // draft | lobby | live | paused | ended | abandoned
+  stateVersion     Int       @default(0)
+  config           Json      @default("{}")
+  secret           Json      @default("{}")
+  plan             Json      @default("{}") // sponsor, scope, hazard, ground rules, assumptions, stop word
+  templateId       String?
+  sourceDocumentId String?
+  currentInjectId  String?
+  scenarioStartAt  DateTime?
+  timeboxMin       Int?
+  injectBudget     Int?
+  advancePolicy    String    @default("facilitator") // facilitator | all_teams | votes_in | timer
+  startedAt        DateTime?
+  pausedAt         DateTime?
+  pausedMsTotal    Int       @default(0)
+  endedAt          DateTime?
+  endReason        String?
+  isPractice       Boolean   @default(false)
+  joinCode         String?   @unique
+  joinCodeFailures Int       @default(0)
+  guestJoin        Boolean   @default(false)
+  createdById      String?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  createdBy      User?             @relation("ExerciseCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  template       ExerciseTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  sourceDocument SourceDocument?   @relation(fields: [sourceDocumentId], references: [id], onDelete: SetNull)
+
+  objectives    Objective[]
+  teams         Team[]
+  participants  Participant[]
+  injects       Inject[]
+  responses     Response[]
+  scoreState    ScoreState?
+  events        ExerciseEvent[]
+  observations  Observation[]
+  ratings       CapabilityRating[]
+  hotwash       HotwashItem[]
+  feedback      Feedback[]
+  chat          ChatMessage[]
+  clocks        RegulatoryClock[]
+  aars          AfterActionReport[]
+  actionItems   ActionItem[]
+  rubrics       Rubric[]
+  guestSessions GuestSession[]
+
+  @@index([status])
+  @@index([mode, createdAt])
+  @@index([organizationId, createdAt])
+}
+
+model Objective {
+  id             String             @id @default(cuid())
+  organizationId String             @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  seq            Int
+  text           String
+  capabilityIds  String[]           @default([])
+  injectIds      String[]           @default([])
+  exercise       Exercise           @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  ratings        CapabilityRating[]
+  observations   Observation[]
+  hotwash        HotwashItem[]
+  actionItems    ActionItem[]
+
+  @@index([exerciseId, seq])
+}
+
+model Team {
+  id             String        @id @default(cuid())
+  organizationId String        @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  name           String
+  seq            Int
+  exercise       Exercise      @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  participants   Participant[]
+  responses      Response[]
+  chat           ChatMessage[]
+
+  @@unique([exerciseId, name])
+}
+
+model Participant {
+  id              String    @id @default(cuid())
+  organizationId  String    @default(dbgenerated("ce_default_org_id()"))
+  exerciseId      String
+  userId          String?
+  guestName       String?
+  displayName     String
+  title           String?
+  organization    String?
+  teamId          String?
+  roles           String[]  @default([]) // lead_facilitator | controller | evaluator | scribe | player | observer
+  isDecisionMaker Boolean   @default(false)
+  isGuest         Boolean   @default(false)
+  joinedAt        DateTime?
+  leftAt          DateTime?
+  removedAt       DateTime?
+  /// Facilitator-confirmed attendance: attended | partial | absent. Null until confirmed.
+  attendance      String?
+  /// Added after ENDEX for a person who took part without a device (no user, no guest session).
+  noDevice        Boolean   @default(false)
+  createdAt       DateTime  @default(now())
+  exercise        Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  user            User?     @relation("ExerciseParticipantUser", fields: [userId], references: [id], onDelete: SetNull)
+  team            Team?     @relation(fields: [teamId], references: [id], onDelete: SetNull)
+
+  responses     Response[]
+  guestSessions GuestSession[]
+  feedback      Feedback[]
+  chat          ChatMessage[]
+  observations  Observation[]  @relation("ObservationAuthor")
+  hotwash       HotwashItem[]
+
+  @@unique([exerciseId, userId])
+  @@unique([exerciseId, displayName])
+  @@index([exerciseId, teamId])
+}
+
+model Inject {
+  id               String     @id @default(cuid())
+  organizationId   String     @default(dbgenerated("ce_default_org_id()"))
+  exerciseId       String
+  seq              Int
+  status           String     @default("pending") // pending | held | open | closed
+  source           String     @default("template") // template | contingency | module
+  title            String
+  scenarioTime     DateTime?
+  targetTeamIds    String[]   @default([])
+  content          Json       @default("{}")
+  secret           Json       @default("{}")
+  templateInjectId String?
+  budgetMs         Int?
+  openedAt         DateTime?
+  closesAt         DateTime?
+  closedAt         DateTime?
+  closeTrigger     String?
+  releasedById     String?
+  controllerNotes  String?
+  createdAt        DateTime   @default(now())
+  exercise         Exercise   @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  responses        Response[]
+
+  @@unique([exerciseId, seq])
+  @@index([status, closesAt])
+}
+
+model Response {
+  id             String      @id @default(cuid())
+  organizationId String      @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  injectId       String
+  participantId  String
+  teamId         String?
+  kind           String // vote | answer | entry | deliverable
+  payload        Json        @default("{}")
+  status         String      @default("submitted") // submitted | confirmed | denied (entries)
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+  exercise       Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  inject         Inject      @relation(fields: [injectId], references: [id], onDelete: Cascade)
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+  team           Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  grades         Grade[]
+  // Partial unique indexes (one vote per participant per inject, one answer
+  // and one deliverable per team per inject) are raw SQL in the migration.
+
+  @@index([injectId, kind])
+  @@index([exerciseId, kind])
+}
+
+// Append-only. The effective grade is the latest one. CE grades are human.
+model Grade {
+  id             String   @id @default(cuid())
+  organizationId String   @default(dbgenerated("ce_default_org_id()"))
+  responseId     String
+  source         String   @default("human")
+  attempt        Int      @default(1)
+  score          Float?
+  rating         String?
+  rationale      String?
+  details        Json     @default("{}")
+  createdById    String?
+  createdAt      DateTime @default(now())
+  response       Response @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@unique([responseId, source, attempt])
+}
+
+model ScoreState {
+  exerciseId     String   @id
+  organizationId String   @default(dbgenerated("ce_default_org_id()"))
+  path           String?
+  cumulative     Float    @default(0) // Crisis Sim: sum of per-team average vote quality, one decimal
+  teamScores     Json     @default("{}")
+  updatedAt      DateTime @updatedAt
+  exercise       Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+}
+
+// Append-only.
+model ExerciseEvent {
+  id                 String   @id @default(cuid())
+  organizationId     String   @default(dbgenerated("ce_default_org_id()"))
+  exerciseId         String
+  type               String
+  at                 DateTime @default(now())
+  actorParticipantId String?
+  actorUserId        String?
+  injectId           String?
+  data               Json     @default("{}")
+  exercise           Exercise @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId, at])
+  @@index([exerciseId, type])
+}
+
+model Observation {
+  id                  String       @id @default(cuid())
+  organizationId      String       @default(dbgenerated("ce_default_org_id()"))
+  exerciseId          String
+  injectId            String?
+  objectiveId         String?
+  capabilityId        String?
+  authorParticipantId String?
+  text                String
+  kind                String       @default("observation") // observation | strength | afi
+  at                  DateTime     @default(now())
+  exercise            Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  objective           Objective?   @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  capability          Capability?  @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  author              Participant? @relation("ObservationAuthor", fields: [authorParticipantId], references: [id], onDelete: SetNull)
+
+  @@index([exerciseId, at])
+}
+
+model CapabilityRating {
+  id             String      @id @default(cuid())
+  organizationId String      @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  objectiveId    String
+  capabilityId   String?
+  rating         String // P | S | M | U, or N (not evaluated; rationale required)
+  source         String      @default("evaluator")
+  rationale      String?
+  byUserId       String?
+  createdAt      DateTime    @default(now())
+  exercise       Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  objective      Objective   @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+  capability     Capability? @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+
+  @@index([exerciseId, objectiveId])
+}
+
+model HotwashItem {
+  id              String       @id @default(cuid())
+  organizationId  String       @default(dbgenerated("ce_default_org_id()"))
+  exerciseId      String
+  kind            String // strength | afi | parking_lot
+  objectiveId     String?
+  text            String
+  byParticipantId String?
+  createdAt       DateTime     @default(now())
+  exercise        Exercise     @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  objective       Objective?   @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+  by              Participant? @relation(fields: [byParticipantId], references: [id], onDelete: SetNull)
+
+  @@index([exerciseId])
+}
+
+model Feedback {
+  id             String      @id @default(cuid())
+  organizationId String      @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  participantId  String
+  ratings        Json        @default("{}")
+  comments       String?
+  createdAt      DateTime    @default(now())
+  exercise       Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([exerciseId, participantId])
+}
+
+model ChatMessage {
+  id             String      @id @default(cuid())
+  organizationId String      @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  teamId         String?
+  channel        String      @default("all") // all | team | control | simcell
+  participantId  String
+  body           String
+  at             DateTime    @default(now())
+  exercise       Exercise    @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  team           Team?       @relation(fields: [teamId], references: [id], onDelete: SetNull)
+  participant    Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId, at])
+}
+
+model RegulatoryClock {
+  id             String    @id @default(cuid())
+  organizationId String    @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  key            String // sec_8k | hipaa_60d | gdpr_72h | nydfs_72h | pci_brand | insurer_notice | state_ag | custom
+  label          String
+  durationHours  Int?
+  businessDays   Int?
+  triggeredAt    DateTime? // scenario time
+  deadlineAt     DateTime? // scenario time
+  metAt          DateTime? // scenario time
+  status         String    @default("pending") // pending | running | met | missed | not_applicable
+  exercise       Exercise  @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+
+  @@index([exerciseId])
+}
+
+model AfterActionReport {
+  id             String             @id @default(cuid())
+  organizationId String             @default(dbgenerated("ce_default_org_id()"))
+  exerciseId     String
+  version        Int                @default(1)
+  previousId     String?            @unique
+  status         String             @default("draft") // draft | review | final
+  sections       Json               @default("{}")
+  editLog        Json               @default("[]")
+  sourceDocSha   String?
+  contentHash    String?
+  canonical      String? // canonical JSON that was signed
+  generating     Boolean            @default(false)
+  lastError      String?
+  /// After-action meeting: when it was held, who attended (free text), when the improvement plan was agreed.
+  aamAt          DateTime?
+  aamAttendees   String?
+  ipAgreedAt     DateTime?
+  /// Why this version amends the previous one (amendments only).
+  amendReason    String?
+  /// The PDF rendered at finalize. Final exports and the evidence bundle serve these exact bytes.
+  finalPdfFileId String?
+  finalizedAt    DateTime?
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+  exercise       Exercise           @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  previous       AfterActionReport? @relation("AarVersions", fields: [previousId], references: [id], onDelete: SetNull)
+  finalPdf       StoredFile?        @relation("AarFinalPdf", fields: [finalPdfFileId], references: [id], onDelete: SetNull)
+  next           AfterActionReport? @relation("AarVersions")
+  signatures     AarSignature[]
+  actionItems    ActionItem[]
+
+  @@unique([exerciseId, version])
+}
+
+model AarSignature {
+  id             String            @id @default(cuid())
+  organizationId String            @default(dbgenerated("ce_default_org_id()"))
+  aarId          String
+  role           String // facilitator | sponsor
+  name           String
+  title          String?
+  userId         String?
+  signedAt       DateTime          @default(now())
+  keyId          String
+  signature      String
+  aar            AfterActionReport @relation(fields: [aarId], references: [id], onDelete: Cascade)
+  user           User?             @relation("AarSignatureUser", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([aarId, role])
+}
+
+model ActionItem {
+  id               String             @id @default(cuid())
+  organizationId   String             @default(dbgenerated("ce_default_org_id()"))
+  exerciseId       String?
+  aarId            String?
+  capabilityId     String?
+  objectiveId      String?
+  afi              String
+  correctiveAction String
+  poete            String? // planning | organization | equipment | training | exercise
+  responsibleOrg   String?
+  poc              String?
+  pocEmail         String?
+  startDate        DateTime?
+  dueDate          DateTime?
+  status           String             @default("open") // open | in_progress | done | rejected
+  priority         String             @default("medium") // low | medium | high
+  closureEvidence  String?
+  rejectedReason   String?
+  evidence         Json               @default("[]")
+  lastRemindedAt   DateTime?
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  exercise         Exercise?          @relation(fields: [exerciseId], references: [id], onDelete: SetNull)
+  aar              AfterActionReport? @relation(fields: [aarId], references: [id], onDelete: SetNull)
+  capability       Capability?        @relation(fields: [capabilityId], references: [id], onDelete: SetNull)
+  objective        Objective?         @relation(fields: [objectiveId], references: [id], onDelete: SetNull)
+
+  @@index([status, dueDate])
+  @@index([organizationId])
+}
+
+model ExerciseSchedule {
+  id             String            @id @default(cuid())
+  organizationId String            @default(dbgenerated("ce_default_org_id()"))
+  title          String
+  mode           String
+  templateId     String?
+  rrule          String?
+  nextAt         DateTime?
+  durationMin    Int               @default(60)
+  teams          Json              @default("[]")
+  documents      Json              @default("[]")
+  frameworkKeys  String[]          @default([])
+  briefMd        String?
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  template       ExerciseTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+}
+
+// A Cloud note a user dismissed (one row per user and note). No telemetry:
+// the row only hides the note for that user. Scalar FK, like the rest.
+model CloudNoteDismissal {
+  id             String   @id @default(cuid())
+  organizationId String   @default(dbgenerated("ce_default_org_id()"))
+  userId         String
+  note           String
+  createdAt      DateTime @default(now())
+
+  @@unique([userId, note])
+}
+
+// Public keys that have signed after-action reports. The private key is
+// EXPORT_SIGNING_PRIVATE_KEY (one key for case files and reports); every key
+// that has signed stays here so rotation keeps old reports verifiable.
+model SigningKey {
+  keyId          String    @id
+  organizationId String    @default(dbgenerated("ce_default_org_id()"))
+  publicKeyPem   String
+  createdAt      DateTime  @default(now())
+  retiredAt      DateTime?
+}
+
+// Durable job queue for exercise work (outbox pattern). See
+// src/lib/exercise/runtime/jobs.
+model Job {
+  id             String    @id @default(cuid())
+  organizationId String    @default(dbgenerated("ce_default_org_id()"))
+  kind           String
+  key            String    @unique
+  status         String    @default("queued") // queued | running | done | failed
+  attempts       Int       @default(0)
+  maxAttempts    Int       @default(3)
+  runAfter       DateTime  @default(now())
+  lockedUntil    DateTime?
+  payload        Json      @default("{}")
+  lastError      String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([status, runAfter])
+}
+
+// ---------------------------------------------------------------------------
+// Incident guest links. An outside party (outside counsel, IR firm, insurer)
+// reaches ONE incident by link: summary, public updates, chat and evidence.
+// No account. Only the SHA-256 of the token is stored (lib/incident/guest).
+// ---------------------------------------------------------------------------
+model IncidentGuestInvite {
+  id             String    @id @default(cuid())
+  organizationId String
+  incidentId     String
+  email          String
+  name           String?
+  company        String?
+  tokenHash      String    @unique
+  /// May the guest upload evidence (they always see the evidence list).
+  canUpload      Boolean   @default(true)
+  invitedById    String
+  invitedByName  String?
+  expiresAt      DateTime
+  revokedAt      DateTime?
+  revokedById    String?
+  lastAccessAt   DateTime?
+  createdAt      DateTime  @default(now())
+
+  incident Incident @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+
+  @@index([incidentId])
+}
+
+// ---------------------------------------------------------------------------
+// Public status page for one incident (lib/incident/status-page). The token in
+// the public URL is the only auth; only its SHA-256 is stored. The page shows
+// updates posted to it (IncidentStatusUpdate.publishedToPageAt) and nothing
+// else from the incident.
+// ---------------------------------------------------------------------------
+model IncidentStatusPage {
+  id             String   @id @default(cuid())
+  organizationId String
+  incidentId     String   @unique
+  tokenHash      String   @unique
+  isPublished    Boolean  @default(false)
+  title          String
+  audienceScope  String   @default("public") // public | customer (customer + public updates)
+  createdById    String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  incident    Incident               @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  subscribers StatusPageSubscriber[]
+
+  @@index([organizationId])
+}
+
+// Double opt-in email subscriber of a status page. The confirm token is
+// stored hashed and burned on use; unsubscribe links are signed (no table).
+model StatusPageSubscriber {
+  id               String    @id @default(cuid())
+  organizationId   String
+  statusPageId     String
+  email            String
+  confirmTokenHash String?   @unique
+  confirmSentAt    DateTime?
+  confirmedAt      DateTime?
+  unsubscribedAt   DateTime?
+  createdAt        DateTime  @default(now())
+
+  statusPage IncidentStatusPage @relation(fields: [statusPageId], references: [id], onDelete: Cascade)
+
+  @@unique([statusPageId, email])
+  @@index([statusPageId, confirmedAt])
+}
+
+// ---------------------------------------------------------------------------
+// Broadcast messaging (lib/broadcast): one org-wide out-of-band message to
+// selected members and escalation contacts over the delivery providers. One
+// recipient row per person (acknowledged by signed link or in the app) and
+// one delivery row per provider attempt.
+// ---------------------------------------------------------------------------
+model Broadcast {
+  id             String   @id @default(cuid())
+  organizationId String
+  title          String
+  message        String
+  /// Selected channels: app, email, sms, voice, webhook.
+  channels       Json
+  /// The audience as chosen (lib/broadcast/audience).
+  audience       Json
+  createdById    String
+  createdByName  String?
+  createdAt      DateTime @default(now())
+
+  recipients BroadcastRecipient[]
+
+  @@index([organizationId, createdAt])
+}
+
+model BroadcastRecipient {
+  id              String    @id @default(cuid())
+  organizationId  String
+  broadcastId     String
+  userId          String?
+  contactId       String?
+  name            String
+  acknowledgedAt  DateTime?
+  acknowledgedVia String? // app | link | voice
+  createdAt       DateTime  @default(now())
+
+  broadcast  Broadcast           @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+  deliveries BroadcastDelivery[]
+
+  @@index([broadcastId])
+  @@index([userId])
+}
+
+model BroadcastDelivery {
+  id             String   @id @default(cuid())
+  organizationId String
+  broadcastId    String
+  recipientId    String
+  provider       String // app | smtp | resend | twilio-sms | twilio-voice | webhook[-N] | <plugin id>
+  channel        String // app | email | sms | voice | webhook | custom
+  destination    String?
+  status         String   @default("pending") // pending | sent | failed | skipped
+  providerRef    String?
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  recipient BroadcastRecipient @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@unique([recipientId, provider])
+  @@index([broadcastId])
+}
+
+// ---------------------------------------------------------------------------
+// Incident playbook runs (lib/incident/playbooks): a playbook document from
+// Documents attached to an incident and run as a checklist. The steps are
+// copied from the document when it is attached, so editing the checklist
+// never changes the document and a later document edit never changes a
+// running checklist.
+// ---------------------------------------------------------------------------
+model IncidentPlaybookRun {
+  id             String    @id @default(cuid())
+  organizationId String
+  incidentId     String
+  /// The SourceDocument it came from (scalar; the document may be deleted later).
+  documentId     String?
+  documentTitle  String
+  documentSha256 String
+  libraryKey     String?
+  status         String    @default("active") // active | completed
+  createdById    String
+  createdByName  String?
+  completedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  incident Incident               @relation(fields: [incidentId], references: [id], onDelete: Cascade)
+  steps    IncidentPlaybookStep[]
+
+  @@index([incidentId])
+}
+
+model IncidentPlaybookStep {
+  id             String    @id @default(cuid())
+  organizationId String
+  runId          String
+  incidentId     String
+  position       Int
+  section        String
+  text           String
+  detail         String?
+  kind           String    @default("step") // step | decision
+  source         String    @default("document") // document | custom
+  doneAt         DateTime?
+  doneById       String?
+  doneByName     String?
+  /// IncidentTask made from this step, if any.
+  taskId         String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  run IncidentPlaybookRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@index([runId, position])
+}
+
+// Readiness scorecard, one row per day (src/lib/exercise/readiness). The
+// nightly cron upserts today's row, so a rerun the same day replaces it.
+model ReadinessSnapshot {
+  id             String   @id @default(cuid())
+  organizationId String   @default(dbgenerated("ce_default_org_id()"))
+  day            DateTime @db.Date
+  score          Int
+  rubricVersion  Int
+  components     Json     @default("[]")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([organizationId, day])
+}

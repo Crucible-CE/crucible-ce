@@ -1,0 +1,442 @@
+@import "tailwindcss";
+
+/* =========================================================
+   Crucible CE — MIST design system  (full switchover)
+   Mist is now the base @theme (light, default). The only
+   alternate is Carbon — the dark / War Room theme, selected
+   via data-theme="dark". All prior themes (Halcyon, Solace,
+   Geist, Quorum, and the legacy dark set) have been removed:
+   any unmatched data-theme value falls through to this base.
+   Token layer is --mist-* (renamed from the old --mist-*; run
+   the repo-wide rename in MIGRATION.md so component refs match).
+   ========================================================= */
+@theme {
+  /* ── Mist raw tokens — cool slate paper, white surfaces ───── */
+  --mist-paper: #f6f8fb;
+  --mist-paper-2: #eef2f7;
+  --mist-surface: #ffffff;
+  --mist-surface-2: #fbfcfe;
+  --mist-line: #e2e8f0;
+  --mist-line-2: #cbd5e1;
+  --mist-hairline: rgba(15, 23, 42, 0.06);
+
+  --mist-ink-1: #0f172a;
+  --mist-ink-2: #1e293b;
+  --mist-ink-3: #334155;
+  --mist-ink-4: #475569;
+  --mist-ink-5: #94a3b8;
+
+  /* Foundation = Forge Ember. Drives primary, ring, principal
+     nav, active-item foreground. Mist is single-accent. */
+  --mist-navy: #ea580c;
+  --mist-navy-hi: #c2410c;
+  --mist-navy-soft: rgba(234, 88, 12, 0.10);
+
+  /* Signature accent — same ember (active chips, link hovers,
+     .accent-surface). Intentionally collapsed to one accent. */
+  --mist-indigo: #ea580c;
+  --mist-indigo-hi: #fb923c;
+  --mist-indigo-lo: #c2410c;
+  --mist-indigo-soft: rgba(234, 88, 12, 0.10);
+  --mist-indigo-softer: rgba(234, 88, 12, 0.05);
+
+  /* Tertiary — calm teal-emerald, data-viz only */
+  --mist-teal: #0f766e;
+  --mist-teal-hi: #0d9488;
+  --mist-teal-soft: rgba(15, 108, 117, 0.10);
+
+  --mist-ok: #059669;
+  --mist-warn: #d97706;
+  --mist-danger: #dc2626;
+
+  /* Readiness single-hue ramp (Readiness Score component) */
+  --mist-ready: #059669;
+  --mist-ready-track: #d1fae5;
+  --mist-ready-tint: #ecfdf5;
+  --mist-ready-text: #047857;
+
+  /* ── Background & Surface ─────────────────────────────────── */
+  --color-background: var(--mist-paper);
+  --color-foreground: var(--mist-ink-1);
+  --color-card: var(--mist-surface);
+  --color-card-foreground: var(--mist-ink-1);
+  --color-popover: var(--mist-surface);
+  --color-popover-foreground: var(--mist-ink-1);
+
+  /* ── Muted / Subtle ───────────────────────────────────────── */
+  --color-muted: var(--mist-paper-2);
+  --color-muted-foreground: var(--mist-ink-4);
+
+  /* ── Primary — Forge Ember ────────────────────────────────── */
+  --color-primary: var(--mist-navy);
+  --color-primary-foreground: #ffffff;
+
+  /* ── Secondary ────────────────────────────────────────────── */
+  --color-secondary: var(--mist-paper-2);
+  --color-secondary-foreground: var(--mist-ink-2);
+
+  /* ── Accent ───────────────────────────────────────────────── */
+  --color-accent: var(--mist-indigo);
+  --color-accent-foreground: #ffffff;
+
+  /* ── Status ───────────────────────────────────────────────── */
+  --color-destructive: var(--mist-danger);
+  --color-destructive-foreground: #ffffff;
+  --color-success: var(--mist-ok);
+  --color-success-foreground: #ffffff;
+  --color-warning: var(--mist-warn);
+  --color-warning-foreground: #ffffff;
+
+  /* ── Borders & Inputs ─────────────────────────────────────── */
+  --color-border: var(--mist-line);
+  --color-input: var(--mist-surface);
+  --color-ring: var(--mist-navy);
+
+  /* ── Radii — sharp 2px ────────────────────────────────────── */
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 3px;
+  --radius-xl: 4px;
+  --radius-2xl: 6px;
+
+  /* ── Typography — Geist everywhere ────────────────────────── */
+  --font-sans: var(--font-geist), "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-display-face), "Space Grotesk", var(--font-geist), ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: var(--font-jetbrains-mono), "JetBrains Mono", ui-monospace, "Cascadia Code", monospace;
+
+  --type-eyebrow-size: 0.6875rem;
+  --type-eyebrow-tracking: 0.12em;
+  --type-eyebrow-weight: 600;
+  --type-caption-size: 0.6875rem;
+  --type-caption-leading: 1.4;
+  --type-body-sm-size: 0.78125rem;
+  --type-body-sm-leading: 1.5;
+  --type-body-size: 0.875rem;
+  --type-body-leading: 1.55;
+  --type-body-lg-size: 1rem;
+  --type-body-lg-leading: 1.6;
+  --type-headline-size: 1.375rem;
+  --type-headline-tracking: -0.02em;
+  --type-headline-leading: 1.2;
+  --type-display-size: 2rem;
+  --type-display-tracking: -0.03em;
+  --type-display-leading: 1.1;
+
+  /* ── Layout chrome ────────────────────────────────────────── */
+  --nav-height: 60px;
+  --color-sidebar: var(--mist-surface);
+  --color-sidebar-foreground: var(--mist-ink-2);
+  --color-sidebar-border: var(--mist-line);
+  --color-sidebar-accent: var(--mist-navy-soft);
+  --color-sidebar-accent-foreground: var(--mist-navy);
+  --color-sidebar-ring: var(--mist-navy);
+
+  /* ── Chart palette — ember leads, diversified so series read ── */
+  --color-chart-1: var(--mist-navy);   /* ember   */
+  --color-chart-2: var(--mist-ok);     /* emerald */
+  --color-chart-3: var(--mist-ink-4);  /* slate   */
+  --color-chart-4: var(--mist-warn);   /* amber   */
+  --color-chart-5: #2563eb;            /* info    */
+  --color-chart-6: var(--mist-teal);   /* teal    */
+
+  /* ── Elevation — flat, hairline-emphasis ──────────────────── */
+  --elevation-0: 0 0 0 1px var(--mist-hairline);
+  --elevation-1:
+    0 1px 1px rgba(15, 23, 42, 0.03),
+    0 0 0 1px rgba(15, 23, 42, 0.06);
+  --elevation-2:
+    0 2px 4px rgba(15, 23, 42, 0.06),
+    0 6px 12px rgba(15, 23, 42, 0.05),
+    0 0 0 1px rgba(15, 23, 42, 0.06);
+  --elevation-3:
+    0 8px 20px rgba(15, 23, 42, 0.08),
+    0 20px 40px rgba(15, 23, 42, 0.08),
+    0 0 0 1px rgba(15, 23, 42, 0.08);
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  --motion-duration-fast: 140ms;
+  --motion-duration: 200ms;
+  --motion-duration-slow: 320ms;
+  --motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --motion-state: var(--motion-duration) var(--motion-ease);
+  --motion-route: var(--motion-duration) var(--motion-ease);
+  --motion-skeleton: 1500ms ease-in-out infinite;
+
+  --animate-accordion-down: accordion-down var(--motion-duration) var(--motion-ease);
+  --animate-accordion-up: accordion-up var(--motion-duration) var(--motion-ease);
+  --animate-fade-in: fade-in var(--motion-duration-slow) var(--motion-ease) both;
+  --animate-rise-in: rise-in var(--motion-duration-slow) var(--motion-ease) both;
+
+  /* ── Legacy war-room aliases — neutralised (no neon glow) ──── */
+  --cyber-primary: var(--mist-navy);
+  --cyber-accent: var(--mist-ok);
+  --cyber-danger: var(--mist-danger);
+  --cyber-panel: var(--mist-surface);
+  --cyber-border: var(--mist-line);
+  --cyber-glow: 0 0 0 1px rgba(234, 88, 12, 0.06);
+  --cyber-text-dim: var(--mist-ink-5);
+}
+
+/* =========================================================
+   Carbon — dark / War Room. The only alternate theme.
+   Selected via data-theme="dark" (kept in DARK_THEME_VALUES
+   so the `dark` class is applied for Tailwind dark: modifiers).
+   The bare [data-theme="dark"] alternative lets a SECTION of a
+   light page opt into Carbon (marketing war-room showcase) —
+   custom properties cascade to its descendants. Being unlayered,
+   it beats the @layer theme base regardless of specificity.
+   ========================================================= */
+:root[data-theme="dark"],
+[data-theme="dark"] {
+  --mist-paper: #0a0c10;
+  --mist-paper-2: #0e1218;
+  --mist-surface: #12161d;
+  --mist-surface-2: #161b23;
+  --mist-line: #212833;
+  --mist-line-2: #2d3643;
+  --mist-hairline: rgba(230, 234, 241, 0.06);
+
+  --mist-ink-1: #e6eaf1;
+  --mist-ink-2: #cdd3dd;
+  --mist-ink-3: #aab2c0;
+  --mist-ink-4: #9aa4b2;
+  --mist-ink-5: #5c6675;
+
+  --mist-navy: #f97316;
+  --mist-navy-hi: #fb923c;
+  --mist-navy-soft: rgba(249, 115, 22, 0.14);
+  --mist-indigo: #f97316;
+  --mist-indigo-hi: #fb923c;
+  --mist-indigo-lo: #ea580c;
+  --mist-indigo-soft: rgba(249, 115, 22, 0.14);
+  --mist-indigo-softer: rgba(249, 115, 22, 0.07);
+  --mist-teal: #2dd4bf;
+  --mist-teal-hi: #5eead4;
+  --mist-teal-soft: rgba(45, 212, 191, 0.12);
+  --mist-ok: #34d399;
+  --mist-warn: #fbbf24;
+  --mist-danger: #f87171;
+  --mist-ready: #34d399;
+  --mist-ready-track: rgba(16, 185, 129, 0.16);
+  --mist-ready-tint: rgba(16, 185, 129, 0.10);
+  --mist-ready-text: #6ee7b7;
+
+  --color-background: var(--mist-paper);
+  --color-foreground: var(--mist-ink-1);
+  --color-card: var(--mist-surface);
+  --color-card-foreground: var(--mist-ink-1);
+  --color-popover: var(--mist-surface);
+  --color-popover-foreground: var(--mist-ink-1);
+  --color-muted: var(--mist-paper-2);
+  --color-muted-foreground: var(--mist-ink-4);
+  --color-primary: var(--mist-navy);
+  --color-primary-foreground: #0a0c10;
+  --color-secondary: var(--mist-surface-2);
+  --color-secondary-foreground: var(--mist-ink-1);
+  --color-accent: var(--mist-indigo);
+  --color-accent-foreground: #0a0c10;
+  --color-destructive: var(--mist-danger);
+  --color-destructive-foreground: #0a0c10;
+  --color-success: var(--mist-ok);
+  --color-success-foreground: #0a0c10;
+  --color-warning: var(--mist-warn);
+  --color-warning-foreground: #0a0c10;
+  --color-border: var(--mist-line);
+  --color-input: var(--mist-surface);
+  --color-ring: var(--mist-navy);
+
+  --color-sidebar: var(--mist-paper-2);
+  --color-sidebar-foreground: var(--mist-ink-1);
+  --color-sidebar-border: var(--mist-line);
+  --color-sidebar-accent: var(--mist-navy-soft);
+  --color-sidebar-accent-foreground: var(--mist-navy);
+  --color-sidebar-ring: var(--mist-navy);
+
+  --color-chart-1: var(--mist-navy);
+  --color-chart-2: var(--mist-ok);
+  --color-chart-3: var(--mist-ink-4);
+  --color-chart-4: var(--mist-warn);
+  --color-chart-5: #60a5fa;
+  --color-chart-6: var(--mist-teal);
+
+  --elevation-0: 0 0 0 1px var(--mist-hairline);
+  --elevation-1:
+    0 1px 1px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  --elevation-2:
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 8px 20px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  --elevation-3:
+    0 12px 28px rgba(0, 0, 0, 0.6),
+    0 24px 56px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.05);
+
+  --cyber-primary: var(--mist-navy);
+  --cyber-accent: var(--mist-ok);
+  --cyber-danger: var(--mist-danger);
+  --cyber-panel: var(--mist-surface);
+  --cyber-border: var(--mist-line);
+  --cyber-glow: 0 0 0 1px rgba(249, 115, 22, 0.18);
+  --cyber-text-dim: var(--mist-ink-5);
+}
+
+/* ── React Flow Overrides ────────────────────────────────────── */
+.react-flow__controls {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-1);
+  overflow: hidden;
+}
+.react-flow__controls-button {
+  background: var(--color-card);
+  color: var(--color-foreground);
+  border-color: var(--color-border);
+  fill: var(--color-foreground);
+  width: 28px;
+  height: 28px;
+}
+.react-flow__controls-button:hover { background: var(--color-accent); }
+.react-flow__controls-button svg { fill: var(--color-foreground); }
+.react-flow__minimap {
+  background: var(--color-card) !important;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--elevation-1);
+}
+.react-flow__minimap-mask { fill: var(--color-background); opacity: 0.7; }
+
+/* ── Brand wordmark theme-switching ─────────────────────────────
+   Keyed directly off the authoritative `<html data-theme>`
+   attribute instead of the `.dark` class. The class is toggled
+   by JS in response to settings/RouteTheme changes and can
+   desync from data-theme (e.g. when the bootstrap script lands
+   before RouteTheme remounts). The attribute is the source of
+   truth set everywhere we toggle theme; this selector pair
+   guarantees the right wordmark always renders.
+   ──────────────────────────────────────────────────────────── */
+:root[data-theme="dark"] .logo-on-light { display: none; }
+:root:not([data-theme="dark"]) .logo-on-dark { display: none; }
+
+/* ── War-room utility classes (kept for inject screens) ──────── */
+.cyber-panel {
+  background: var(--cyber-panel);
+  border: 1px solid var(--cyber-border);
+  box-shadow: var(--cyber-glow);
+}
+.cyber-glow-text { color: var(--cyber-primary); }
+.inject-text {
+  font-family: var(--font-mono, 'JetBrains Mono', monospace);
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+/* ── Motion utilities ────────────────────────────────────────── */
+@keyframes accordion-down { from { height: 0; } to { height: var(--radix-accordion-content-height); } }
+@keyframes accordion-up { from { height: var(--radix-accordion-content-height); } to { height: 0; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+.motion-fade-in { animation: fade-in var(--motion-duration-slow) var(--motion-ease) both; }
+.motion-rise-in { animation: rise-in var(--motion-duration-slow) var(--motion-ease) both; }
+.motion-stagger > * { animation: rise-in var(--motion-duration-slow) var(--motion-ease) both; }
+.motion-stagger > *:nth-child(1) { animation-delay: 0ms; }
+.motion-stagger > *:nth-child(2) { animation-delay: 40ms; }
+.motion-stagger > *:nth-child(3) { animation-delay: 80ms; }
+.motion-stagger > *:nth-child(4) { animation-delay: 120ms; }
+.motion-stagger > *:nth-child(5) { animation-delay: 160ms; }
+.motion-stagger > *:nth-child(6) { animation-delay: 200ms; }
+.motion-stagger > *:nth-child(7) { animation-delay: 240ms; }
+.motion-stagger > *:nth-child(8) { animation-delay: 280ms; }
+@media (prefers-reduced-motion: reduce) {
+  .motion-fade-in, .motion-rise-in, .motion-stagger > * { animation: none; }
+}
+
+/* ── Base Layer ───────────────────────────────────────────────── */
+@layer base {
+  *, *::before, *::after { border-color: var(--color-border); }
+
+  body {
+    background: var(--color-background);
+    color: var(--color-foreground);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv01", "ss01";
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+  }
+
+  h1, h2 {
+    font-family: var(--font-display);
+    font-feature-settings: "ss01", "kern";
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--color-foreground), transparent 88%);
+    border-radius: 9999px; border: 2px solid transparent; background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in srgb, var(--color-foreground), transparent 78%); background-clip: padding-box;
+  }
+  ::-webkit-scrollbar-corner { background: transparent; }
+  * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--color-foreground), transparent 88%) transparent; }
+
+  a, button, [role="button"], input, select, textarea, [tabindex]:not([tabindex="-1"]) {
+    transition:
+      color var(--motion-duration-fast) var(--motion-ease),
+      background-color var(--motion-duration-fast) var(--motion-ease),
+      border-color var(--motion-duration-fast) var(--motion-ease),
+      box-shadow var(--motion-duration-fast) var(--motion-ease),
+      opacity var(--motion-duration-fast) var(--motion-ease),
+      transform var(--motion-duration-fast) var(--motion-ease);
+  }
+
+  :focus-visible { outline: 2px solid var(--color-ring); outline-offset: 2px; }
+  ::selection { background: var(--mist-navy-soft, rgba(234, 88, 12, 0.18)); color: var(--color-foreground); }
+}
+
+/* ── Type-scale utility classes ─────────────────────────────────── */
+.eyebrow {
+  font-size: var(--type-eyebrow-size);
+  letter-spacing: var(--type-eyebrow-tracking);
+  font-weight: var(--type-eyebrow-weight);
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+  line-height: 1;
+}
+.headline {
+  font-family: var(--font-display);
+  font-size: var(--type-headline-size);
+  letter-spacing: var(--type-headline-tracking);
+  line-height: var(--type-headline-leading);
+  font-weight: 600;
+  color: var(--color-foreground);
+}
+.display {
+  font-family: var(--font-display);
+  font-size: var(--type-display-size);
+  letter-spacing: var(--type-display-tracking);
+  line-height: var(--type-display-leading);
+  font-weight: 700;
+  color: var(--color-foreground);
+}
+.tabular-nums { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* Hairline divider — 1px at 6% opacity */
+.hairline { border-color: var(--mist-hairline); }
+.hairline-t { border-top: 1px solid var(--mist-hairline); }
+.hairline-b { border-bottom: 1px solid var(--mist-hairline); }
+.hairline-l { border-left: 1px solid var(--mist-hairline); }
+.hairline-r { border-right: 1px solid var(--mist-hairline); }
+
+/* Accent surface helpers — ember soft tint for active/selected */
+.accent-surface { background: var(--mist-indigo-soft); color: var(--mist-indigo); }
+.accent-surface-strong { background: var(--mist-indigo); color: #ffffff; }
+
+/* Readiness ramp helper — single-hue intensity; opacity encodes maturity */
+.readiness-seg { background: var(--mist-ready); border-radius: 1px; }
+.readiness-track { background: var(--mist-ready-track); border-radius: 1px; }

@@ -1,0 +1,19 @@
+# Known test fixtures and content ids, not secrets:
+# - secrets.test.ts: a made-up value for boot-time secret validation tests
+# - origin.test.ts, exercise socket tests: the sample Sec-WebSocket-Key from RFC 6455
+# - vitest.config.ts: the fixed AUTH_SECRET for integration tests
+# - exercise content: slug ids such as key: "solarwinds-2020"
+[extend]
+useDefault = true
+
+[allowlist]
+regexTarget = "line"
+paths = [
+  '''src/lib/boot/secrets\.test\.ts''',
+  '''src/lib/socket/origin\.test\.ts''',
+  '''src/lib/exercise/socket/server\.test\.ts''',
+]
+regexes = [
+  '''test-secret-0123456789abcdef0123456789abcdef''',
+  '''(?:replayKey|key): "[a-z0-9]+(?:[-_][a-z0-9]+)+"''',
+]

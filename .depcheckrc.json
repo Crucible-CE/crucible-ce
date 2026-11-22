@@ -1,0 +1,12 @@
+{
+  "ignores": [
+    "@aws-sdk/client-s3",
+    "@aws-sdk/s3-request-presigner",
+    "@tailwindcss/postcss",
+    "tailwindcss",
+    "postcss",
+    "eslint",
+    "eslint-config-next"
+  ],
+  "ignorePatterns": [".next", "node_modules"]
+}

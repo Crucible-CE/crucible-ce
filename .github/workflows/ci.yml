@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Least privilege: CI only reads the repository.
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    env:
+      DATABASE_URL: postgresql://u:p@127.0.0.1:5432/db
+      DIRECT_URL: postgresql://u:p@127.0.0.1:5432/db
+      NEXTAUTH_SECRET: ci-placeholder-secret
+      AUTH_SECRET: ci-placeholder-secret
+      MASTER_KEK: "0000000000000000000000000000000000000000000000000000000000000000"
+    steps:
+      # Actions are pinned to full commit SHAs (the comment names the release).
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npx next build
+
+  # Release gate: the Playwright smoke suite (e2e/) against the real Docker
+  # image built from this checkout, with Postgres, Redis, Mailpit and a signed
+  # webhook receiver (e2e/docker-compose.e2e.yml). e2e/global-setup.ts brings
+  # the stack up (`docker compose ... up --build --wait`, i.e. waits for the
+  # app healthcheck) and global-teardown removes it with `down -v`.
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+      - name: Upload Playwright report and stack logs
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

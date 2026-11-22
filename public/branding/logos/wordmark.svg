@@ -1,0 +1,5 @@
+<svg width="206" height="32" viewBox="0 0 206 32" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Crucible-CE">
+  <rect x="0" y="2" width="28" height="28" rx="2" fill="#ea580c"></rect>
+  <path d="M14 7 L21.9 23.5 L14 19.6 L6.1 23.5 Z" fill="#ffffff"></path>
+  <text x="40" y="22" font-family="Geist, -apple-system, system-ui, sans-serif" font-size="19" font-weight="700" letter-spacing="-0.4" fill="#000000">Crucible<tspan fill="#ea580c">‑CE</tspan></text>
+</svg>
