@@ -25,7 +25,7 @@ On top of that, CE has incident command tools for the response itself: a war roo
 
 - **Separate from your environment.** CE keeps its own accounts and has no SSO on purpose. It does not depend on your directory, email, chat or network, so a compromise of those does not lock your responders out.
 - **Host it apart.** Best practice is to run it outside your corporate network. Use a separate cloud account, its own domain and DNS, and email and SMS providers that don't depend on your systems. Securing access is up to you. See [docs/deployment.md](docs/deployment.md).
-- **Strong sign-in.** Two-factor sign-in supports authenticator apps, security keys, passkeys and recovery codes. An administrator can require it for everyone. See [docs/authentication.md](docs/authentication.md).
+- **Secure sign-in.** Two-factor sign-in supports authenticator apps, security keys, passkeys and recovery codes. An administrator can require it for everyone. See [docs/authentication.md](docs/authentication.md).
 - **Evidence you can trust.** Actions are written to a hash-chained ledger, and the case file exports as an encrypted package signed with Ed25519, with a verifier script anyone can run offline.
 
 ## Out-of-band communication
