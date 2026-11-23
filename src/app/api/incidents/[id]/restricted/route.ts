@@ -24,7 +24,7 @@ class LockStateChanged extends Error {}
 // LOCK (reporter, IC, or administrator, while unlocked): seeds the participant
 // allowlist from the current team — reporter, assignee, every command-role
 // holder (the IC included) and the locker — as ordinary, removable
-// participants (strict founder rule: reporter/assignee carry no implicit
+// participants (strict lock rule: reporter/assignee carry no implicit
 // access), and captures the seated IC in lockedIcUserId + lockedAt.
 //
 // UNLOCK (M7): administrators, or the IC who held the seat at lock time and

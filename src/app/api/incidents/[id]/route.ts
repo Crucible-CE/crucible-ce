@@ -222,7 +222,7 @@ export async function PATCH(
       data: { ...updateFields, ...extraFields, ...closureFields, ...(timelineJson ? { timelineJson } : {}) },
     });
 
-    // Founder lock rule: the assignee gets no implicit access to a locked
+    // Strict lock rule: the assignee gets no implicit access to a locked
     // incident; they are enrolled as an ordinary (removable) participant on
     // (re)assignment instead.
     if (data.assignedToId && data.assignedToId !== existing.assignedToId) {

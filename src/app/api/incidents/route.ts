@@ -122,7 +122,7 @@ export async function POST(req: Request) {
     },
   });
 
-  // Founder lock rule: the reporter and assignee get no implicit access to a
+  // Strict lock rule: the reporter and assignee get no implicit access to a
   // locked incident — they are enrolled here as ordinary (removable)
   // participants, so a later lock keeps them in the room via the allowlist.
   await ensureIncidentParticipants({

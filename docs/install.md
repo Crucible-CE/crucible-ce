@@ -15,7 +15,7 @@ No image is published yet. The stack builds the app image from this checkout.
 
 1. Clone the repository and create `.env`.
    ```bash
-   git clone https://github.com/crucible-ce/crucible-ce.git
+   git clone https://github.com/Crucible-CE/crucible-ce.git
    cd crucible-ce
    cp .env.docker.example .env
    ```

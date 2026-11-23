@@ -1,4 +1,4 @@
-// Auto-enrol the reporter / assignee as incident participants (founder rule).
+// Auto-enrol the reporter / assignee as incident participants.
 //
 // The access check grants a LOCKED incident only to participants, same-org
 // administrators and the incident commander — reporter and assignee get no

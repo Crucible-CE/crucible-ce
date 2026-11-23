@@ -1,4 +1,4 @@
-// Redacted pages for LOCKED incidents (founder decision, final).
+// Redacted pages for LOCKED incidents (final).
 //
 // Paging is never refused or skipped because the target can't see a locked
 // incident: a silently skipped escalation during an insider-threat incident is

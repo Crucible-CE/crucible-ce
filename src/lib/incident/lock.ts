@@ -1,4 +1,4 @@
-// Incident lock (`Incident.restricted`) semantics — founder decision.
+// Incident lock (`Incident.restricted`) semantics.
 //
 // A locked incident has TWO effects:
 //   1. Visibility: only named participants can see it — enforced by

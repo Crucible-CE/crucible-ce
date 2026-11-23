@@ -2,7 +2,7 @@
 //
 // Default incidents are org-scoped: any org member with the right permission may
 // see them. A *restricted* (locked) incident is hidden from the org at large.
-// Founder rule (final, strict): a locked incident is visible ONLY to
+// Strict lock rule (final): a locked incident is visible ONLY to
 //   - its participants (the allowlist),
 //   - org ADMINISTRATORS (who also edit it, lib/incident/lock), and
 //   - the incident commander (who also edits it).

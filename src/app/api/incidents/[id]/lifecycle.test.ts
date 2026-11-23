@@ -1,5 +1,5 @@
 // @vitest-environment node
-// Incident lifecycle under the strict founder lock rule:
+// Incident lifecycle under the strict lock rule:
 //   - POST /api/incidents enrols reporter + assignee as participants;
 //   - PATCH assignedToId enrols the new assignee (inside the update tx);
 //   - DELETE is an administrator-only SOFT delete (deletedAt/deletedById,

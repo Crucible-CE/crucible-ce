@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Strict founder lock rule end to end (ported from the hosted product, adapted
+// Strict lock rule end to end (ported from the hosted product, adapted
 // to CE's single-org schema): reporter/assignee are enrolled as removable
 // participants (no implicit access); the participant helper is idempotent;
 // someone a locked incident excludes can't be paged into it; and the M7

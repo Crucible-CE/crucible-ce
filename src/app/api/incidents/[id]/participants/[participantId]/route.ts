@@ -13,7 +13,7 @@ interface RouteContext {
 }
 
 // DELETE /api/incidents/[id]/participants/[participantId] — remove someone from
-// the allowlist. Strict founder lock rule: the reporter and assignee are
+// the allowlist. Strict lock rule: the reporter and assignee are
 // ordinary participants with no implicit access, so they CAN be removed (and
 // then lose a locked incident). The IC and administrators keep access anyway.
 export async function DELETE(_req: Request, context: RouteContext) {
