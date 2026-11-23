@@ -4,47 +4,61 @@
 
 # Crucible CE
 
-**Self-hosted incident management and tabletop exercises for security teams.**
+**A self-hosted out-of-band crisis management platform.**
 
 [![License: PolyForm Internal Use](https://img.shields.io/badge/license-PolyForm%20Internal%20Use-blue.svg)](LICENSE)
 [![Self-hosted](https://img.shields.io/badge/deploy-self--hosted-ea580c.svg)](docs/install.md)
 [![CI](https://github.com/Crucible-CE/crucible-ce/actions/workflows/ci.yml/badge.svg)](https://github.com/Crucible-CE/crucible-ce/actions/workflows/ci.yml)
 
-Crucible CE is the self-hosted edition of [Crucible](https://crucible-ex.com). It runs one organization on your own server. The source is available under the PolyForm Internal Use License.
+When ransomware, an identity compromise or a cloud outage takes down your email, chat and sign-in, your response still has to run somewhere. Crucible CE is that place. It runs on a server you control, outside your corporate network and identity plane, so you can reach your responders, coordinate the response and keep a record while your normal tools are down.
 
-It includes war-room chat, an action board, a decisions log, a hash-chained ledger, paging with escalation, an evidence vault and signed case-file exports. It also runs tabletop exercises in three modes, with hotwash, signed after-action reports, an improvement plan and a program report.
+It pages people over email, SMS, voice and signed webhooks, and keeps escalating until someone acknowledges. It has its own accounts, its own database and its own delivery providers, so nothing it needs depends on the systems that are failing.
+
+On top of that, CE has incident command tools for the response itself: a war room, an action board, a decisions log and a tamper-evident record. It also runs tabletop exercises, so your team can practice the response before you need it.
 
 <p align="center">
   <a href="docs/images/paging-demo.gif"><img src="docs/images/paging-demo.gif" width="880" alt="Paging an outside IR retainer from the incident, watching delivery per channel, and the retainer acknowledging from the emailed link"></a>
 </p>
 <p align="center"><sub>Paging an outside IR retainer. SMS and voice show "skipped" because this install has no Twilio account.</sub></p>
 
-## Hosting and sign-in
+## Out of band by design
 
-Best practice is to host CE outside your corporate network and identity plane. Use a separate cloud account, its own domain and DNS, and email and SMS providers that don't depend on your systems. Securing access is up to you. See [docs/deployment.md](docs/deployment.md).
+- **Separate from your environment.** CE keeps its own accounts and has no SSO on purpose. It does not depend on your directory, email, chat or network, so a compromise of those does not lock your responders out.
+- **Host it apart.** Best practice is to run it outside your corporate network. Use a separate cloud account, its own domain and DNS, and email and SMS providers that don't depend on your systems. Securing access is up to you. See [docs/deployment.md](docs/deployment.md).
+- **Strong sign-in.** Two-factor sign-in supports authenticator apps, security keys, passkeys and recovery codes. An administrator can require it for everyone. See [docs/authentication.md](docs/authentication.md).
+- **No email needed to recover.** If someone is locked out and email is down, an administrator can create a reset link for them.
+- **Evidence you can trust.** Actions are written to a hash-chained ledger, and the case file exports as an encrypted package signed with Ed25519, with a verifier script anyone can run offline.
 
-CE has no SSO on purpose. It keeps its own accounts. Two-factor sign-in supports authenticator apps, security keys, passkeys and recovery codes. An administrator can require it for everyone. See [docs/authentication.md](docs/authentication.md).
+## Out-of-band communication
 
-## Features
+- **Paging.** Email (SMTP or Resend), SMS and voice (your Twilio account), signed webhooks and plugins. Pages retry and are rate limited. See [docs/paging.md](docs/paging.md).
+- **Acknowledgment.** Acknowledge by link, SMS reply or voice keypress. Unacknowledged pages escalate up the roster.
+- **Escalation matrix.** Internal and external contacts by tier and role. Email and phone are verified separately. SMS and voice go only to a verified phone or one an administrator allowed.
+- **Delivery providers.** Use the built-in providers or write your own plugin. See [docs/delivery-providers.md](docs/delivery-providers.md) and [providers/README.md](providers/README.md).
+- **Broadcast messaging.** Message members and escalation contacts over the paging channels, with delivery status and acknowledgements.
+- **Guest links.** Invite outside counsel, an IR firm or an insurer to one incident by link, with no account. They see its summary, chat and evidence, and nothing else. See [docs/incidents.md](docs/incidents.md).
+- **Public status pages.** One page per incident with the updates you post to it. Subscribers confirm by email and get each update.
 
-- **Incidents.** Severity, status, response roles, participants, presence, and a timeline written to a hash-chained ledger.
-- **War room.** Real-time chat, presence, and a link to your own call bridge.
+## Incident command
+
+- **Incidents.** Severity, status, response roles, participants, presence, and a timeline written to the ledger.
+- **War room.** Real-time chat and a link to your own call bridge.
 - **Action board.** Tasks with owners, due times, acknowledgments, comments and attachments. Corrective actions stay open after the incident closes.
 - **Decisions log.** What was decided, by whom, when, and why.
-- **Status updates, SITREPs, stakeholder notifications, shift handover and postmortems.**
+- **Reporting.** Status updates, SITREPs, stakeholder notifications, shift handover and postmortems.
 - **Evidence vault.** Uploads encrypted at rest with AES-256-GCM, with an access log.
-- **Escalation matrix.** Contacts per role. Email and phone are verified separately. SMS and voice go only to a verified phone or one an administrator allowed.
-- **Paging.** Email (SMTP or Resend), SMS and voice (your Twilio account), signed webhooks and plugins. Acknowledge by link, SMS reply or voice keypress. Unacknowledged pages escalate up the roster. See [docs/paging.md](docs/paging.md).
-- **Guest links.** Invite outside counsel, an IR firm or an insurer to one incident by link. They see its summary, chat and evidence, and nothing else. See [docs/incidents.md](docs/incidents.md).
-- **Public status pages.** One page per incident with the updates you post to it. Subscribers confirm by email and get each update.
-- **Messaging.** Broadcast to members and escalation contacts over the paging channels, with delivery status and acknowledgements.
-- **Playbooks tab.** Playbooks from Documents, suggested by rules and run as a checklist on the incident.
-- **Case-file export.** An encrypted package signed with Ed25519, plus a verifier script. See [docs/case-file-exports.md](docs/case-file-exports.md).
-- **Locked incidents.** Only participants, the incident commander and administrators can see them. Only the incident commander and administrators can edit them.
+- **Locked incidents.** Only participants, the incident commander and administrators can see them. Only the incident commander and administrators can edit them. Pages for a locked incident carry no details.
+- **Playbooks.** Playbooks from Documents, suggested by rules and run as a checklist on the incident.
 - **Also.** Calendar with ICS feeds, MITRE ATT&CK tagging, SLA timers, metrics, an org audit log, and invite-based membership with reader, contributor, exercise director and administrator roles.
-- **Exercises.** Crisis Sim, Playbook Exercise and Strategic TTX, with a template library and Studio for branching scenarios. Members join with their account. Guests join with an invite code and no account. See [docs/exercises.md](docs/exercises.md).
-- **After-action.** Hotwash, objective ratings, participant feedback, attendance, an after-action report you write with evidence from the record, an improvement plan, facilitator and sponsor sign-off, and an evidence bundle anyone can verify offline.
-- **Improvement.** Exercise schedule with calendar files and a private ICS feed, work items, a program report (PDF) with cadence against your policy, and an executive dashboard with a rule-based readiness score.
+
+## Tabletop exercises
+
+Practice the response before you need it. Run Crisis Sim, Playbook Exercise and Strategic TTX exercises from a template library, or build branching scenarios in Studio. Members join with their account. Guests join with an invite code and no account. See [docs/exercises.md](docs/exercises.md).
+
+After an exercise you get a hotwash, objective ratings, an after-action report written with evidence from the record, an improvement plan, and an evidence bundle anyone can verify offline. A schedule, a program report and a readiness score track your practice over time.
+
+## Getting started
+
 - **Setup wizard.** Creates your organization and first administrator. It needs a one-time code from the server log.
 - **Onboarding.** A checklist that checks itself off from real data, with practice steps: a training incident that reaches no one, the solo practice Crisis Sim, your IR playbook and your first scheduled exercise. See [docs/first-run.md](docs/first-run.md#onboarding).
 
@@ -55,32 +69,32 @@ Click a screenshot to open it full size. The data is a fictional company.
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="docs/images/ce-command.png"><img src="docs/images/ce-command.png" alt="Incident command center"></a>
-      <p><b>Command center.</b> Severity, status, the incident log, SLAs and response roles.</p>
-    </td>
-    <td width="50%" valign="top">
-      <a href="docs/images/ce-warroom.png"><img src="docs/images/ce-warroom.png" alt="War-room chat"></a>
-      <p><b>War room.</b> Chat, presence and a bridge link.</p>
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <a href="docs/images/ce-actions.png"><img src="docs/images/ce-actions.png" alt="Action board and decisions log"></a>
-      <p><b>Action board.</b> Tasks and the decisions log.</p>
-    </td>
-    <td width="50%" valign="top">
       <a href="docs/images/ce-paging.png"><img src="docs/images/ce-paging.png" alt="Pages and per-channel delivery"></a>
       <p><b>Paging.</b> Delivery status per channel. Push comes from a <a href="providers/README.md">provider plugin</a>.</p>
     </td>
-  </tr>
-  <tr>
     <td width="50%" valign="top">
       <a href="docs/images/ce-matrix.png"><img src="docs/images/ce-matrix.png" alt="Escalation matrix"></a>
       <p><b>Escalation matrix.</b> Internal and external contacts by tier.</p>
     </td>
+  </tr>
+  <tr>
     <td width="50%" valign="top">
       <a href="docs/images/ce-ledger.png"><img src="docs/images/ce-ledger.png" alt="Sealed case file and ledger verification"></a>
       <p><b>Case file.</b> A signed, encrypted export and the ledger check.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/ce-command.png"><img src="docs/images/ce-command.png" alt="Incident command center"></a>
+      <p><b>Command center.</b> Severity, status, the incident log, SLAs and response roles.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="docs/images/ce-warroom.png"><img src="docs/images/ce-warroom.png" alt="War-room chat"></a>
+      <p><b>War room.</b> Chat, presence and a bridge link.</p>
+    </td>
+    <td width="50%" valign="top">
+      <a href="docs/images/ce-actions.png"><img src="docs/images/ce-actions.png" alt="Action board and decisions log"></a>
+      <p><b>Action board.</b> Tasks and the decisions log.</p>
     </td>
   </tr>
 </table>
