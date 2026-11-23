@@ -12,7 +12,7 @@
 
 When ransomware, an identity compromise or a cloud outage takes down your email, chat and sign-in, your response still has to run somewhere. Crucible CE is that place. It runs on a server you control, outside your corporate network and identity plane, so you can reach your responders, coordinate the response and keep a record while your normal tools are down.
 
-It pages people over email, SMS, voice and signed webhooks, and keeps escalating until someone acknowledges. It has its own accounts, its own database and its own delivery providers, so nothing it needs depends on the systems that are failing.
+Crucible CE can page people over email, SMS and voice, with a fully customizable escalation matrix. It has its own accounts, its own database and its own delivery providers, so nothing it needs depends on the systems that are failing.
 
 On top of that, CE has incident command tools for the response itself: a war room, an action board, a decisions log and a tamper-evident record. It also runs tabletop exercises, so your team can practice the response before you need it.
 
