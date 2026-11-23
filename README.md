@@ -185,7 +185,7 @@ CE sends no telemetry, including about Cloud notes. It calls out only to the pro
 
 Crucible Cloud is the hosted version. It runs on infrastructure separate from yours. The same hardened sign-in, with hardware security keys and one-time passcodes, is planned.
 
-| | CE | Cloud |
+| | CE | Cloud (Coming Soon) |
 |---|---|---|
 | Incidents, war room, action board, decisions log and case-file exports | Yes | Yes |
 | Paging with escalation over your own email, Twilio, webhooks and plugins | Yes | Yes |
