@@ -542,7 +542,7 @@ export function formatOffset(min: number): string {
 
 interface ZodLikeIssue {
   code: string;
-  path: (string | number)[];
+  path: PropertyKey[];
   minimum?: number | bigint;
   maximum?: number | bigint;
   type?: string;
@@ -574,7 +574,7 @@ function pathLabel(p: unknown): string {
   return typeof p === "string" && p in PATH_LABELS ? `the ${PATH_LABELS[p as PathKey]} path` : "a path";
 }
 
-function contentWhere(path: (string | number)[], content: TemplateInjectContent): string {
+function contentWhere(path: PropertyKey[], content: TemplateInjectContent): string {
   const [a, b, c, d, e] = path;
   if (a === "variants") {
     const where = pathLabel(b);
@@ -604,7 +604,7 @@ function contentWhere(path: (string | number)[], content: TemplateInjectContent)
   return "the inject content";
 }
 
-function secretWhere(path: (string | number)[]): string {
+function secretWhere(path: PropertyKey[]): string {
   const [a, b, c] = path;
   if (a === "followUps") return `the follow-up for ${String(b)} option ${String(c)}`;
   if (a === "deliverableCriteria" && typeof b === "number") return `grading criterion ${b + 1}`;
@@ -615,7 +615,7 @@ function secretWhere(path: (string | number)[]): string {
   return "the scoring";
 }
 
-function configWhere(path: (string | number)[]): string {
+function configWhere(path: PropertyKey[]): string {
   const [a, b] = path;
   if (a === "teams" && typeof b === "number") return `team ${b + 1}`;
   if (a === "teams") return "the teams";

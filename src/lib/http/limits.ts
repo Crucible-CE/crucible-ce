@@ -41,7 +41,7 @@ export function jsonWithin(value: unknown, max: number = LIMITS.JSON_BYTES): boo
 }
 
 /** Wrap a free-form zod schema with a serialized-size cap. */
-export function boundedJson<T extends z.ZodTypeAny>(schema: T, max: number = LIMITS.JSON_BYTES) {
+export function boundedJson<T extends z.ZodType>(schema: T, max: number = LIMITS.JSON_BYTES) {
   return schema.refine((v) => jsonWithin(v, max), { message: `JSON value exceeds ${max} characters` });
 }
 

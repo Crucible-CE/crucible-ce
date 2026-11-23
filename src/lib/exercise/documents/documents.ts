@@ -24,7 +24,7 @@ export const PASTE_MAX_CHARS = 1_000_000;
 
 export const documentMetaSchema = z.object({
   title: z.string().trim().min(1, "Enter a title.").max(200, "Use 200 characters or fewer."),
-  kind: z.enum(DOCUMENT_KINDS, { errorMap: () => ({ message: "Pick a document type." }) }),
+  kind: z.enum(DOCUMENT_KINDS, { error: "Pick a document type." }),
 });
 
 export const pasteDocumentSchema = documentMetaSchema.extend({

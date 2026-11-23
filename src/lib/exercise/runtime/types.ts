@@ -345,7 +345,7 @@ export interface ExerciseMode<C = unknown> {
   label: string;
   version: number;
   caps: ModeCaps;
-  configSchema: z.ZodType<C, z.ZodTypeDef, unknown>;
+  configSchema: z.ZodType<C, unknown>;
   injectContentSchema: z.ZodType<unknown>;
   injectSecretSchema: z.ZodType<unknown>;
   /** Default advance policy for new exercises. */

@@ -11,7 +11,7 @@ import { assertIncidentWritable } from "@/lib/incident/lock";
 const bodySchema = z.object({
   action: z.string().min(1).max(100),
   notes: z.string().min(1).max(2000),
-  metadata: boundedJson(z.record(z.unknown())).optional(),
+  metadata: boundedJson(z.record(z.string(), z.unknown())).optional(),
 });
 
 // GET /api/incidents/[id]/activity

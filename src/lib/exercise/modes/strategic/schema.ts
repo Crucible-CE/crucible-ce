@@ -83,7 +83,7 @@ export const exerciseConfigSchema = z.object({
   schemaVersion: z.literal(1).default(1),
   /** Injects come from the template (scripted MSEL). Older values read as template. */
   source: z.literal("template").catch("template").default("template"),
-  scenario: scenarioSchema.default({}),
+  scenario: scenarioSchema.prefault({}),
   /** Minutes per inject when the advance policy is timer. */
   injectMinutes: z.number().int().min(3).max(120).nullable().default(null),
   /** Optional game rule: end early when every active team is effective on two injects in a row. */
@@ -132,7 +132,7 @@ const clockPresetSchema = z
 export const templateConfigSchema = z.object({
   schemaVersion: z.literal(1).default(1),
   source: z.literal("template").catch("template").default("template"),
-  scenario: scenarioSchema.default({}),
+  scenario: scenarioSchema.prefault({}),
   winCondition: z.enum(["none", "dynamic"]).default("none"),
   teams: z.array(z.string().trim().min(1).max(60)).min(2).max(10),
   scenarioAnchor: z

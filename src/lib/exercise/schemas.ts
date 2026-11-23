@@ -213,7 +213,7 @@ export const controlSchema = z
     addMinutes: z.number().int().min(1).max(120).optional(),
     message: z.string().trim().min(1, "Write a message.").max(1000).optional(),
     teamId: id.nullable().optional(),
-    config: z.record(z.enum(LIVE_CONFIG_KEYS), z.boolean()).optional(),
+    config: z.partialRecord(z.enum(LIVE_CONFIG_KEYS), z.boolean()).optional(),
     clock: z
       .object({
         key: z.string().trim().regex(/^[a-z0-9_]{1,40}$/),

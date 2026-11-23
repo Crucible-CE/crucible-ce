@@ -39,12 +39,14 @@ const optText = (max: number) =>
     .max(max, `Use ${max} characters or fewer.`)
     .nullable()
     .optional()
-    .transform((v) => (v === undefined ? undefined : v ? v : null));
+    .transform((v) => (v === undefined ? undefined : v ? v : null))
+    .optional();
 
 const optDate = z
   .union([z.string().trim().regex(/^\d{4}-\d{2}-\d{2}(T[\d:.]+Z?)?$/, "Use a date like 2026-12-31."), z.null()])
   .optional()
-  .transform((v) => (v === undefined ? undefined : v ? new Date(v.length === 10 ? `${v}T00:00:00.000Z` : v) : null));
+  .transform((v) => (v === undefined ? undefined : v ? new Date(v.length === 10 ? `${v}T00:00:00.000Z` : v) : null))
+  .optional();
 
 const optId = z.string().max(40).nullable().optional();
 
@@ -59,7 +61,8 @@ export const actionItemFieldsSchema = z.object({
   pocEmail: z
     .union([z.string().trim().email("Use a valid email address.").max(200), z.literal(""), z.null()])
     .optional()
-    .transform((v) => (v === undefined ? undefined : v ? v : null)),
+    .transform((v) => (v === undefined ? undefined : v ? v : null))
+    .optional(),
   startDate: optDate,
   dueDate: optDate,
   status: z.enum(ACTION_STATUSES).optional(),

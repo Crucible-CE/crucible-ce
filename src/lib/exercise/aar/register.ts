@@ -36,7 +36,8 @@ export const aarListFiltersSchema = z.object({
     .max(200)
     .optional()
     .catch(undefined)
-    .transform((v) => (v ? v : undefined)),
+    .transform((v) => (v ? v : undefined))
+    .optional(),
 });
 export type AarListFilters = z.infer<typeof aarListFiltersSchema>;
 

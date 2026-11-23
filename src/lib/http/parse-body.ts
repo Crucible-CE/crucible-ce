@@ -79,14 +79,13 @@ async function readCapped(req: Request, max: number): Promise<string | null> {
   return new TextDecoder("utf-8").decode(buf);
 }
 
-// The input type parameter is left free so schemas whose input differs from
-// their output (.default(), .transform()) infer T as the OUTPUT type —
-// z.ZodType<T> alone would collapse them and type defaulted fields undefined.
-export async function parseJsonBody<T, I = unknown>(
+// T is the schema; the result is its OUTPUT type, so defaulted and transformed
+// fields come back as the schema produces them.
+export async function parseJsonBody<S extends z.ZodType>(
   req: Request,
-  schema: z.ZodType<T, z.ZodTypeDef, I>,
+  schema: S,
   opts: { maxBytes?: number } = {},
-): Promise<ParseResult<T>> {
+): Promise<ParseResult<z.output<S>>> {
   const maxBytes = opts.maxBytes ?? MAX_JSON_BODY_BYTES;
 
   // No body at all is the "empty JSON" 400 it always was (no Content-Type to

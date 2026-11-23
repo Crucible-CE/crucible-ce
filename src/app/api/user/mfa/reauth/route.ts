@@ -24,7 +24,7 @@ import { ipFromRequest } from "@/lib/security/rate-limit";
 const schema = z.object({
   password: z.string().min(1).max(LIMITS.PASSWORD),
   code: z.string().max(64).optional(),
-  webauthn: z.record(z.unknown()).optional(),
+  webauthn: z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function POST(req: Request) {

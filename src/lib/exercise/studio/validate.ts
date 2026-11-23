@@ -92,15 +92,15 @@ function labelFor(path: Array<string | number>): string {
 }
 
 function messageFor(i: ZodIssue): string {
-  const label = labelFor(i.path);
+  const label = labelFor(i.path as Array<string | number>);
   switch (i.code) {
     case "too_small":
-      return i.type === "array" ? `${label} needs at least ${String(i.minimum)}.` : i.type === "string" ? `${label} is too short.` : `${label} is too small.`;
+      return i.origin === "array" ? `${label} needs at least ${String(i.minimum)}.` : i.origin === "string" ? `${label} is too short.` : `${label} is too small.`;
     case "too_big":
-      return i.type === "array" ? `${label} has too many items.` : i.type === "string" ? `${label} is too long.` : `${label} is too large.`;
+      return i.origin === "array" ? `${label} has too many items.` : i.origin === "string" ? `${label} is too long.` : `${label} is too large.`;
     case "invalid_type":
-      return i.received === "undefined" || i.received === "null" ? `${label} is missing.` : `${label} is not valid.`;
-    case "invalid_string":
+      return /received (undefined|null)/.test(i.message) ? `${label} is missing.` : `${label} is not valid.`;
+    case "invalid_format":
       return `${label} has a format that is not allowed.`;
     case "custom":
       return i.message;

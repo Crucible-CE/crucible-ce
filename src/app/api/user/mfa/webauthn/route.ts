@@ -14,7 +14,7 @@ import { recordActivity } from "@/lib/security/activity-log";
 
 const schema = z.object({
   name: z.string().trim().min(1).max(CREDENTIAL_NAME_MAX),
-  response: z.record(z.unknown()),
+  response: z.record(z.string(), z.unknown()),
 });
 
 export async function POST(req: Request) {

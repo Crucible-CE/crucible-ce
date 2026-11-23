@@ -65,7 +65,7 @@ const templateObjectivesSchema = z
   )
   .max(20);
 
-function safe<T>(schema: z.ZodType<T, z.ZodTypeDef, unknown>, raw: unknown, fallback: T): T {
+function safe<T>(schema: z.ZodType<T, unknown>, raw: unknown, fallback: T): T {
   const r = schema.safeParse(raw);
   return r.success ? r.data : fallback;
 }

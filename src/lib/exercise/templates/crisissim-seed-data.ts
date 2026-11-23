@@ -143,6 +143,7 @@ export function inject(spec: InjectSpec): SeedInject {
     secret: {
       schemaVersion: 1,
       quality,
+      attackTechniques: [],
       followUps,
       clockEffects,
       deliverableCriteria: spec.deliverableCriteria ?? [],
