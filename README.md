@@ -12,7 +12,7 @@
 
 When ransomware, an identity compromise or a cloud outage takes down your email, chat and sign-in, your response still has to run somewhere. Crucible CE is that place. It runs on a server you control, outside your corporate network and identity plane, so you can reach your responders, coordinate the response and keep a record while your normal tools are down.
 
-Crucible CE can page people over email, SMS and voice, with a fully customizable escalation matrix. It has its own accounts, its own database and its own delivery providers, so nothing it needs depends on the systems that are failing.
+Crucible CE can page people over email, SMS and voice, with a fully customizable escalation matrix. SMS and voice paging need your own Twilio account. It has its own accounts, its own database and its own delivery providers, so nothing it needs depends on the systems that are failing.
 
 On top of that, CE has incident command tools for the response itself: a war room, an action board, a decisions log and a tamper-evident record. It also runs tabletop exercises, so your team can practice the response before you need it.
 
@@ -30,7 +30,7 @@ On top of that, CE has incident command tools for the response itself: a war roo
 
 ## Out-of-band communication
 
-- **Paging.** Email (SMTP or Resend), SMS and voice (your Twilio account), signed webhooks and plugins. Pages retry and are rate limited. See [docs/paging.md](docs/paging.md).
+- **Paging.** Email through SMTP or Resend. SMS and voice require a Twilio account, which you bring and configure with your own keys. Signed webhooks and plugins need no account. CE does not send SMS or voice on its own. Pages retry and are rate limited. See [docs/paging.md](docs/paging.md).
 - **Acknowledgment.** Acknowledge by link, SMS reply or voice keypress. Unacknowledged pages escalate up the roster.
 - **Escalation matrix.** Internal and external contacts by tier and role. Email and phone are verified separately. SMS and voice go only to a verified phone or one an administrator allowed.
 - **Delivery providers.** Use the built-in providers or write your own plugin. See [docs/delivery-providers.md](docs/delivery-providers.md) and [providers/README.md](providers/README.md).
