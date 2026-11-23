@@ -19,8 +19,13 @@ test("fresh install routes / and /login to /setup, setup with the log code, then
 
   await page.goto("/");
   await expect(page).toHaveURL(/\/setup$/);
+  // Let the page finish its own requests (the session check) before leaving it.
+  // A navigation that cuts one off logs "Failed to fetch", which the guard
+  // reports as a console error.
+  await settle(page);
   await page.goto("/login");
   await expect(page).toHaveURL(/\/setup$/);
+  await settle(page);
   await expect(page.getByRole("heading", { name: "Set up Crucible CE" })).toBeVisible();
 
   await page.locator("#setupCode").fill(stack().setupCode);
