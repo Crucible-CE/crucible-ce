@@ -146,7 +146,7 @@ These are optional. Without email, copy invite links and send them yourself. To 
 
 `docker compose down -v` also deletes the database and uploads. Back up first. See [docs/upgrading.md](docs/upgrading.md).
 
-When images are published to `ghcr.io/crucible-ce/crucible-ce` (amd64), you can use `docker compose pull && docker compose up -d` instead of building.
+Release images are published to `ghcr.io/crucible-ce/crucible-ce` (amd64 only). To skip the build, run `docker compose pull && docker compose up -d`. To pin a release, set `CRUCIBLE_VERSION` in `.env`, for example `CRUCIBLE_VERSION=0.2.0`. The default is `latest`.
 
 ## Run from source
 

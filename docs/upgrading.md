@@ -27,14 +27,14 @@ If a migration fails, the container exits and restarts with the same error. Rest
 
 ### Published images
 
-When release images exist at `ghcr.io/crucible-ce/crucible-ce` (amd64 only), upgrade without building.
+Release images are published at `ghcr.io/crucible-ce/crucible-ce` (amd64 only). Upgrade without building.
 
 ```bash
 docker compose pull
 docker compose up -d
 ```
 
-To pin a release, set `CRUCIBLE_VERSION=0.2.1` in `.env`. The default is `latest`. Pinning works only after that tag is published. Today there is nothing to pull. Use `--build`.
+To pin a release, set `CRUCIBLE_VERSION=0.2.0` in `.env`. The default is `latest`.
 
 ## From source
 

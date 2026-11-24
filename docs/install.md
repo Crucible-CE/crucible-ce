@@ -50,7 +50,7 @@ The app does not start if `NEXTAUTH_SECRET` is a placeholder or shorter than 32 
 
 Next, send yourself a test page. See [first-run.md](first-run.md). To run a tabletop exercise, see [exercises.md](exercises.md). Set `EXPORT_SIGNING_PRIVATE_KEY` first if you want signed after-action reports. See [case-file-exports.md](case-file-exports.md#key-rotation).
 
-When images are published to `ghcr.io/crucible-ce/crucible-ce` (amd64 only), you can run `docker compose pull && docker compose up -d`. Until then, always add `--build`.
+Release images are published to `ghcr.io/crucible-ce/crucible-ce` (amd64 only). To skip the build, run `docker compose pull && docker compose up -d` instead of `docker compose up -d --build`.
 
 ### PUBLIC_URL and ports
 
